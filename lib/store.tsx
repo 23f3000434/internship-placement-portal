@@ -12,6 +12,7 @@ import type {
   Company,
   CompanyFeedback,
   Drive,
+  Faculty,
   DocumentKind,
   DocumentStatus,
   Internship,
@@ -143,11 +144,12 @@ interface PortalState {
   messages: Message[]
   notifications: Notification[]
   audit: AuditEntry[]
-  faculty: typeof faculty
+  faculty: Faculty[]
 
   // actions
   registerStudent: (s: Omit<Student, 'id' | 'status' | 'facultyId'>) => void
   registerCompany: (c: Omit<Company, 'id' | 'status'>) => void
+  addFaculty: (f: Omit<Faculty, 'id'>) => void
   verifyStudent: (id: string, approve: boolean, reason?: string) => void
   verifyCompany: (id: string, approve: boolean, reason?: string) => void
   setBlocked: (kind: 'student' | 'company', id: string, blocked: boolean, reason?: string) => void
@@ -228,8 +230,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState(seedMessages)
   const [notifications, setNotifications] = useState(seedNotifications)
   const [audit, setAudit] = useState(seedAudit)
+  const [facultyList, setFacultyList] = useState<Faculty[]>(faculty)
 
-  // Demo persistence: keep the walkthrough intact across refreshes and deep links.
+  // Portal persistence: keep the walkthrough intact across refreshes and deep links.
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
@@ -243,6 +246,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         if (s.actingCompanyId) setActingCompanyId(s.actingCompanyId as string)
         if (s.students) setStudents(s.students as Student[])
         if (s.companies) setCompanies(s.companies as Company[])
+        if (s.faculty) setFacultyList(s.faculty as Faculty[])
         if (s.drives) setDrives(s.drives as Drive[])
         if (s.applications) setApplications(s.applications as Application[])
         if (s.interviews) setInterviews(s.interviews as Interview[])
@@ -276,6 +280,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         actingCompanyId,
         students,
         companies,
+        faculty: facultyList,
         drives,
         applications,
         interviews,
@@ -306,6 +311,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     actingCompanyId,
     students,
     companies,
+    facultyList,
     drives,
     applications,
     interviews,
@@ -363,9 +369,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 2. Check Faculty
-    const fMatch = faculty.find((f) => f.email.toLowerCase() === cleanEmail)
+    const fMatch = facultyList.find((f) => f.email.toLowerCase() === cleanEmail)
     if (fMatch) {
-      if (pass !== 'faculty123' && pass !== 'password123' && pass !== 'faculty') {
+      const expectedPass = fMatch.password || 'faculty123'
+      if (pass !== expectedPass && pass !== 'faculty123' && pass !== 'password123') {
         return { success: false, error: 'Invalid email or password. Please try again.' }
       }
       const sess: AuthSession = {
@@ -378,6 +385,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       }
       setAuthSession(sess)
       setRole('faculty')
+      setActingFacultyId(fMatch.id)
       toast.success(`Signed in as ${fMatch.name}`)
       return { success: true }
     }
@@ -503,6 +511,24 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     setCompanies((prev) => [...prev, { ...c, id, status: 'pending' }])
     notify('admin', 'New company registration', `${c.name} submitted registration for verification.`)
     emailToast(c.hrEmail, 'Registration received — pending admin approval')
+  }
+
+  const addFaculty: PortalState['addFaculty'] = (newFaculty) => {
+    const id = uid('f')
+    const created: Faculty = {
+      id,
+      name: newFaculty.name.trim(),
+      email: newFaculty.email.trim().toLowerCase(),
+      department: newFaculty.department,
+      designation: newFaculty.designation || 'Faculty Mentor',
+      password: newFaculty.password || 'password123',
+      phone: newFaculty.phone,
+    }
+    setFacultyList((prev) => [...prev, created])
+    log('Admin (T&P Cell)', 'Added faculty mentor', `${created.name} (${created.department})`)
+    toast.success('Faculty mentor added', {
+      description: `${created.name} registered under ${created.department}.`,
+    })
   }
 
   const verifyStudent: PortalState['verifyStudent'] = (id, approve, reason) => {
@@ -1166,9 +1192,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       messages,
       notifications,
       audit,
-      faculty,
+      faculty: facultyList,
       registerStudent,
       registerCompany,
+      addFaculty,
       verifyStudent,
       verifyCompany,
       setBlocked,

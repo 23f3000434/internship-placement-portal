@@ -68,9 +68,8 @@ export function DocumentViewerModal({
       a.download = doc.fileName || `${label.toLowerCase().replace(/\s+/g, '-')}.pdf`
       a.click()
     } else {
-      // Create text / HTML printable representation
-      const content = `
-========================================================================
+      // Create clean official text transcript
+      const content = `========================================================================
 G H RAISONI COLLEGE OF ENGINEERING & MANAGEMENT, JALGAON
 TRAINING & PLACEMENT CELL - OFFICIAL DOCUMENT RECORD
 ========================================================================
@@ -91,14 +90,15 @@ Tenure: ${internship.startDate} to ${internship.endDate}
 
 DIGITAL SIGNATURE:
 SHA256:${Buffer.from(verifyCode + '-VERIFIED-GHRCEM').toString('base64').slice(0, 28)}
-Public Verification URL: http://localhost:3000/verify?code=${verifyCode}
-========================================================================
-      `
+Public Verification URL: https://internship-placement-portal.vercel.app/verify?code=${verifyCode}
+========================================================================`
       const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = doc.fileName || `${doc.kind}-${internship.id}.txt`
+      // Use .txt extension for plain text transcripts to prevent image viewer crashes
+      const baseName = (doc.fileName || `${doc.kind}-${internship.id}`).replace(/\.[^/.]+$/, '')
+      a.download = `${baseName}-record.txt`
       a.click()
       URL.revokeObjectURL(url)
     }
@@ -189,9 +189,19 @@ Public Verification URL: http://localhost:3000/verify?code=${verifyCode}
 
           {/* Real PDF / Image embedded viewer if base64 data available */}
           {doc.fileData && doc.fileData.startsWith('data:image') && (
-            <div className="rounded border overflow-hidden">
+            <div className="rounded-lg border overflow-hidden bg-black/5 p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={doc.fileData} alt={label} className="w-full object-contain max-h-64" />
+              <img src={doc.fileData} alt={label} className="w-full object-contain max-h-80 rounded" />
+            </div>
+          )}
+
+          {doc.fileData && doc.fileData.startsWith('data:application/pdf') && (
+            <div className="rounded-lg border overflow-hidden">
+              <iframe
+                src={doc.fileData}
+                className="w-full h-96 border-0"
+                title={`Embedded ${label}`}
+              />
             </div>
           )}
 

@@ -45,6 +45,16 @@ export interface Student {
   phone?: string
 }
 
+export interface Faculty {
+  id: string
+  name: string
+  email: string
+  password?: string
+  department: string
+  designation?: string
+  phone?: string
+}
+
 export interface Company {
   id: string
   name: string

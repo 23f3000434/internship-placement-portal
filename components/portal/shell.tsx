@@ -76,6 +76,7 @@ const NAV: Record<Role, NavItem[]> = {
   admin: [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/verifications', label: 'Verification Queues', icon: ShieldCheck },
+    { href: '/admin/faculty', label: 'Faculty Mentors', icon: GraduationCap },
     { href: '/documents', label: 'Documents & PPO', icon: FolderOpen },
     { href: '/admin/blocks', label: 'Block Management', icon: Lock },
     { href: '/admin/analytics', label: 'Reports & Analytics', icon: ClipboardCheck },

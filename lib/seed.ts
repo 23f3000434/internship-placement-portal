@@ -6,6 +6,7 @@ import type {
   Company,
   CompanyFeedback,
   Drive,
+  Faculty,
   Internship,
   InternshipDocument,
   Interview,
@@ -940,7 +941,23 @@ export const seedAudit: AuditEntry[] = [
   },
 ]
 
-export const faculty = [
-  { id: 'f1', name: 'Prof. R. Kulkarni', department: 'Computer Science' },
-  { id: 'f2', name: 'Prof. S. Deshpande', department: 'Mechanical & Electronics' },
+export const faculty: Faculty[] = [
+  {
+    id: 'f1',
+    name: 'Prof. R. Kulkarni',
+    email: 'faculty@college.edu',
+    department: 'Computer Science',
+    designation: 'Associate Professor & Mentor',
+    password: 'faculty123',
+    phone: '+91 98220 55001',
+  },
+  {
+    id: 'f2',
+    name: 'Prof. S. Deshpande',
+    email: 's.deshpande@college.edu',
+    department: 'Mechanical & Electronics',
+    designation: 'Assistant Professor & Mentor',
+    password: 'password123',
+    phone: '+91 98220 55002',
+  },
 ]
