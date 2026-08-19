@@ -49,7 +49,7 @@ import {
 } from './seed'
 import { checkEligibility } from './eligibility'
 
-const SNAPSHOT_KEY = 'interntrack.demo.v1'
+const SNAPSHOT_KEY = 'interntrack.portal.v1'
 
 let uidCounter = 100
 const uid = (p: string) => `${p}${++uidCounter}`
@@ -115,7 +115,7 @@ export type StudentProfilePatch = Partial<
 interface PortalState {
   authSession: AuthSession | null
   login: (email: string, pass: string, targetRole?: Role) => { success: boolean; error?: string }
-  demoLogin: (role: Role, personaId?: string) => void
+  quickLogin: (role: Role, personaId?: string) => void
   logout: () => void
 
   role: Role
@@ -189,7 +189,7 @@ interface PortalState {
   setAtRisk: (studentId: string, flag: boolean) => void
   assignMentor: (studentId: string, facultyId: string) => void
   updateProfile: (patch: StudentProfilePatch) => void
-  resetDemo: () => void
+  resetData: () => void
   exportData: () => void
   importData: (jsonStr: string) => boolean
 }
@@ -296,7 +296,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(SNAPSHOT_KEY, snapshot)
       sessionStorage.setItem(SNAPSHOT_KEY, snapshot)
     } catch {
-      // storage may be unavailable; the demo still works in memory
+      // storage may be unavailable; the portal still works in memory
     }
   }, [
     hydrated,
@@ -346,7 +346,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     // 1. Check Admin
     if (cleanEmail === 'admin@college.edu' || cleanEmail === 'tnp@college.edu') {
       if (pass !== 'admin123' && pass !== 'password123' && pass !== 'admin') {
-        return { success: false, error: 'Invalid admin password (try "admin123")' }
+        return { success: false, error: 'Invalid email or password. Please try again.' }
       }
       const sess: AuthSession = {
         userId: 'admin1',
@@ -363,10 +363,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 2. Check Faculty
-    const fMatch = faculty.find((f) => f.email.toLowerCase() === cleanEmail) || (cleanEmail.includes('faculty') ? faculty[0] : null)
+    const fMatch = faculty.find((f) => f.email.toLowerCase() === cleanEmail)
     if (fMatch) {
       if (pass !== 'faculty123' && pass !== 'password123' && pass !== 'faculty') {
-        return { success: false, error: 'Invalid faculty password (try "faculty123")' }
+        return { success: false, error: 'Invalid email or password. Please try again.' }
       }
       const sess: AuthSession = {
         userId: fMatch.id,
@@ -387,7 +387,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     if (sMatch) {
       const expectedPass = sMatch.password || 'password123'
       if (pass !== expectedPass && pass !== 'password123') {
-        return { success: false, error: 'Invalid student password (default: "password123")' }
+        return { success: false, error: 'Invalid email or password. Please try again.' }
       }
       const sess: AuthSession = {
         userId: sMatch.id,
@@ -409,7 +409,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     if (cMatch) {
       const expectedPass = cMatch.password || 'password123'
       if (pass !== expectedPass && pass !== 'password123') {
-        return { success: false, error: 'Invalid company password (default: "password123")' }
+        return { success: false, error: 'Invalid email or password. Please try again.' }
       }
       const sess: AuthSession = {
         userId: cMatch.id,
@@ -429,7 +429,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     return { success: false, error: 'No account registered with this email' }
   }
 
-  const demoLogin: PortalState['demoLogin'] = (targetRole, personaId) => {
+  const quickLogin: PortalState['quickLogin'] = (targetRole, personaId) => {
     if (targetRole === 'admin') {
       const sess: AuthSession = {
         userId: 'admin1',
@@ -1039,7 +1039,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     toast.success('Profile updated')
   }
 
-  const resetDemo = () => {
+  const resetData = () => {
     try {
       localStorage.removeItem(SNAPSHOT_KEY)
       sessionStorage.removeItem(SNAPSHOT_KEY)
@@ -1066,7 +1066,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     setMessages(seedMessages)
     setNotifications(seedNotifications)
     setAudit(seedAudit)
-    toast.success('Demo data reset', { description: 'All records restored to the seeded state.' })
+    toast.success('Platform data restored', { description: 'All records reset to initial state.' })
   }
 
   const exportData = () => {
@@ -1140,7 +1140,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     () => ({
       authSession,
       login,
-      demoLogin,
+      quickLogin,
       logout,
       role,
       setRole,
@@ -1199,7 +1199,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       setAtRisk,
       assignMentor,
       updateProfile,
-      resetDemo,
+      resetData,
       exportData,
       importData,
     }),

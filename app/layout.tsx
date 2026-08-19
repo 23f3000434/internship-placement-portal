@@ -9,10 +9,9 @@ const _geistSans = Geist({ subsets: ['latin'] })
 const _geistMono = Geist_Mono({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'InternTrack — Internship Tracking & Placement Portal',
+  title: 'InternTrack — GHRCEM Training & Placement Portal',
   description:
-    'Centralized internship tracking and placement portal connecting students, faculty, companies, and administration.',
-  generator: 'v0.app',
+    'Centralized internship tracking and placement portal connecting students, faculty, companies, and the T&P Cell at G H Raisoni College of Engineering & Management, Jalgaon.',
 }
 
 export const viewport: Viewport = {

@@ -84,7 +84,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
               <ArrowLeft className="size-4 mr-1" />
               Back to Home
             </Button>
-            <Button size="sm" render={<Link href="/dashboard" />}>
+            <Button size="sm" render={<Link href="/signin" />}>
               Portal Login
             </Button>
           </div>
@@ -129,7 +129,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
             </p>
           )}
 
-          {/* Quick Demo Codes */}
+          {/* Sample Verification Codes */}
           {sampleCodes.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-xs text-muted-foreground">
               <span>Try sample verified codes:</span>

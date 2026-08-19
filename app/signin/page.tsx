@@ -11,7 +11,7 @@ import { usePortal } from '@/lib/store'
 import type { Role } from '@/lib/types'
 
 export default function SignInPage() {
-  const { login, demoLogin } = usePortal()
+  const { login, quickLogin } = usePortal()
   const router = useRouter()
 
   const [email, setEmail] = useState('')
@@ -40,8 +40,8 @@ export default function SignInPage() {
     }
   }
 
-  const handleQuickDemo = (role: Role, personaId?: string) => {
-    demoLogin(role, personaId)
+  const handleQuickAccess = (role: Role, personaId?: string) => {
+    quickLogin(role, personaId)
     router.push('/dashboard')
   }
 
@@ -111,18 +111,18 @@ export default function SignInPage() {
           </FieldGroup>
         </form>
 
-        {/* 1-Click Demo Personas for Judges */}
+        {/* Quick Access — Pre-registered Institutional Accounts */}
         <div className="mt-6 border-t pt-5">
           <div className="flex items-center gap-1.5 mb-2.5">
             <Sparkles className="size-3.5 text-foreground" />
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Instant Demo Sign-in (For Judges)
+              Quick Access — Pre-registered Accounts
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <button
               type="button"
-              onClick={() => handleQuickDemo('student', 's2')}
+              onClick={() => handleQuickAccess('student', 's2')}
               className="flex flex-col items-start rounded-lg border p-2.5 text-left transition hover:bg-muted"
             >
               <span className="font-semibold text-foreground">🎓 Priya Patel</span>
@@ -130,7 +130,7 @@ export default function SignInPage() {
             </button>
             <button
               type="button"
-              onClick={() => handleQuickDemo('student', 's1')}
+              onClick={() => handleQuickAccess('student', 's1')}
               className="flex flex-col items-start rounded-lg border p-2.5 text-left transition hover:bg-muted"
             >
               <span className="font-semibold text-foreground">🎓 Aarav Sharma</span>
@@ -138,7 +138,7 @@ export default function SignInPage() {
             </button>
             <button
               type="button"
-              onClick={() => handleQuickDemo('company', 'c1')}
+              onClick={() => handleQuickAccess('company', 'c1')}
               className="flex flex-col items-start rounded-lg border p-2.5 text-left transition hover:bg-muted"
             >
               <span className="font-semibold text-foreground">🏢 TechNova</span>
@@ -146,7 +146,7 @@ export default function SignInPage() {
             </button>
             <button
               type="button"
-              onClick={() => handleQuickDemo('faculty')}
+              onClick={() => handleQuickAccess('faculty')}
               className="flex flex-col items-start rounded-lg border p-2.5 text-left transition hover:bg-muted"
             >
               <span className="font-semibold text-foreground">👨‍🏫 Prof. Kulkarni</span>
@@ -155,7 +155,7 @@ export default function SignInPage() {
           </div>
           <button
             type="button"
-            onClick={() => handleQuickDemo('admin')}
+            onClick={() => handleQuickAccess('admin')}
             className="mt-2 w-full flex items-center justify-between rounded-lg border border-foreground/20 bg-muted/60 p-2.5 text-xs text-left font-medium hover:bg-muted transition"
           >
             <span>🏛️ Sign in as <strong>T&amp;P Cell Admin (Full Access)</strong></span>
