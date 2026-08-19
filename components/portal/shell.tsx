@@ -65,14 +65,13 @@ const NAV: Record<Role, NavItem[]> = {
     { href: '/company/interviews', label: 'Interviews', icon: CalendarClock },
     { href: '/company/feedback', label: 'Intern Feedback', icon: ClipboardCheck },
     { href: '/documents', label: 'Documents & PPO', icon: FolderOpen },
-    { href: '/companies', label: 'Companies', icon: Building2 },
   ],
   faculty: [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/faculty/students', label: 'My Students', icon: GraduationCap },
     { href: '/faculty/reviews', label: 'Verifications & Reviews', icon: UserCheck },
     { href: '/documents', label: 'Documents & PPO', icon: FolderOpen },
-    { href: '/companies', label: 'Companies', icon: Building2 },
+    { href: '/companies', label: 'Partner Companies', icon: Building2 },
   ],
   admin: [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -81,7 +80,7 @@ const NAV: Record<Role, NavItem[]> = {
     { href: '/admin/blocks', label: 'Block Management', icon: Lock },
     { href: '/admin/analytics', label: 'Reports & Analytics', icon: ClipboardCheck },
     { href: '/admin/audit', label: 'Audit Log', icon: ScrollText },
-    { href: '/companies', label: 'Companies', icon: Building2 },
+    { href: '/companies', label: 'Companies Directory', icon: Building2 },
   ],
 }
 
@@ -102,8 +101,8 @@ const ROUTE_ACCESS: { prefix: string; roles: Role[] }[] = [
   { prefix: '/dashboard', roles: ['student', 'company', 'faculty', 'admin'] },
   { prefix: '/messages', roles: ['student', 'company', 'faculty', 'admin'] },
   { prefix: '/notifications', roles: ['student', 'company', 'faculty', 'admin'] },
-  { prefix: '/companies', roles: ['student', 'company', 'faculty', 'admin'] },
   { prefix: '/documents', roles: ['student', 'company', 'faculty', 'admin'] },
+  { prefix: '/companies', roles: ['student', 'faculty', 'admin'] },
   // Student-owned records
   { prefix: '/profile', roles: ['student'] },
   { prefix: '/drives', roles: ['student'] },
@@ -141,12 +140,11 @@ function AccessDenied({ pathname, role }: { pathname: string; role: Role }) {
         <Lock className="size-4" aria-hidden="true" />
       </span>
       <div className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Access denied</h1>
+        <h1 className="text-lg font-semibold">Access restricted</h1>
         <p className="max-w-prose text-sm text-muted-foreground">
           You are signed in as <strong className="font-medium">{ROLE_LABEL[role]}</strong>, and{' '}
           <code className="rounded bg-muted px-1 py-0.5 text-xs">{pathname}</code> is restricted to{' '}
-          {permitted.map((r) => ROLE_LABEL[r]).join(', ')}. This page holds personal and internship
-          data that your role is not authorised to view.
+          {permitted.map((r) => ROLE_LABEL[r]).join(', ')}. This section holds records that your role is not authorized to access.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -154,13 +152,9 @@ function AccessDenied({ pathname, role }: { pathname: string; role: Role }) {
           Go to my dashboard
         </Button>
         <Button size="sm" variant="outline" render={<Link href="/messages" />}>
-          Request access from admin
+          Contact Placement Cell
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Switch roles with the demo switcher in the sidebar to view this page as{' '}
-        {ROLE_LABEL[permitted[0]]}.
-      </p>
     </section>
   )
 }
@@ -215,7 +209,6 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function AuthRequired() {
-  const { demoLogin } = usePortal()
   return (
     <section role="alert" className="flex flex-col items-start gap-4 rounded-lg border border-dashed p-8">
       <span className="flex size-10 items-center justify-center rounded-full border">
@@ -224,21 +217,18 @@ function AuthRequired() {
       <div className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Authentication Required</h1>
         <p className="max-w-prose text-sm text-muted-foreground">
-          You must be signed in to access this portal page. Please sign in with your credentials or select a demo persona below.
+          You must be signed in to access this portal page. Please sign in with your college credentials to proceed.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" render={<Link href="/signin" />}>
-          <LogIn className="mr-1.5 size-3.5" /> Sign in with credentials
+          <LogIn className="mr-1.5 size-3.5" /> Sign in to portal
         </Button>
-        <Button size="sm" variant="outline" onClick={() => demoLogin('student')}>
-          Sign in as Student (Priya)
+        <Button size="sm" variant="outline" render={<Link href="/register/student" />}>
+          Register as Student
         </Button>
-        <Button size="sm" variant="outline" onClick={() => demoLogin('admin')}>
-          Sign in as Admin / T&amp;P
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => demoLogin('faculty')}>
-          Sign in as Faculty
+        <Button size="sm" variant="outline" render={<Link href="/register/company" />}>
+          Register as Company
         </Button>
       </div>
     </section>

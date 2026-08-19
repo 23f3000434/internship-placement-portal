@@ -96,15 +96,36 @@ function AddCompanyDialog() {
 export default function CompaniesPage() {
   const p = usePortal()
 
+  const displayedCompanies =
+    p.role === 'company'
+      ? p.companies.filter((c) => c.id === p.actingCompanyId)
+      : p.role === 'admin'
+        ? p.companies
+        : p.companies.filter((c) => c.status === 'approved')
+
+  const title =
+    p.role === 'company'
+      ? 'Company Profile'
+      : p.role === 'admin'
+        ? 'Companies Directory'
+        : 'Partner Companies'
+
+  const description =
+    p.role === 'company'
+      ? 'Your company details and active placement drives.'
+      : p.role === 'admin'
+        ? 'All partner companies and industry recruiters registered with the Training & Placement Cell.'
+        : 'Verified corporate and startup partners hiring students from GHRCEM.'
+
   return (
     <>
       <PageHeader
-        title="Companies"
-        description="Every company partnered with the college, including pending additions."
+        title={title}
+        description={description}
         actions={p.role === 'student' ? <AddCompanyDialog /> : undefined}
       />
       <ul className="grid gap-4 md:grid-cols-2">
-        {p.companies.map((c) => {
+        {displayedCompanies.map((c) => {
           const openDrives = p.drives.filter((d) => d.companyId === c.id && d.status === 'open').length
           const selections = p.applications.filter(
             (a) => a.status === 'selected' && p.drives.find((d) => d.id === a.driveId)?.companyId === c.id,
@@ -117,18 +138,23 @@ export default function CompaniesPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-medium">{c.name}</p>
+                    <p className="font-medium text-foreground">{c.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {c.industry} · {c.location}
                     </p>
                   </div>
-                  <StatusBadge status={c.status} />
+                  {p.role === 'admin' ? (
+                    <StatusBadge status={c.status} />
+                  ) : (
+                    <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                      Partner
+                    </span>
+                  )}
                 </div>
                 <p className="line-clamp-2 text-sm text-muted-foreground">{c.about}</p>
                 <p className="mt-auto text-xs text-muted-foreground">
                   {openDrives} open drive{openDrives === 1 ? '' : 's'} · {selections} selection
                   {selections === 1 ? '' : 's'}
-                  {c.addedByStudentId && ' · added by a student'}
                 </p>
               </Link>
             </li>
