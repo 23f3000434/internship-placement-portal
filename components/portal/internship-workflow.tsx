@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Check, QrCode, Upload } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Check, QrCode, Upload, Eye, FileCheck, FileText, CheckCircle2, Download, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,10 +15,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { StatusBadge } from '@/components/portal/status-badge'
+import { DocumentViewerModal } from '@/components/portal/document-viewer'
 import { usePortal } from '@/lib/store'
 import { documentLabel } from '@/lib/eligibility'
 import type { DocumentKind, Internship, InternshipDocument, Role } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 const DOC_ORDER: DocumentKind[] = [
   'offer_letter',
@@ -85,9 +87,13 @@ function VerifyCodeDialog({ doc }: { doc: InternshipDocument }) {
 function DocumentRow({ doc, internship }: { doc: InternshipDocument; internship: Internship }) {
   const p = usePortal()
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [viewOpen, setViewOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [fileDataUrl, setFileDataUrl] = useState<string | null>(null)
   const [fileName, setFileName] = useState('')
   const [reason, setReason] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const label = documentLabel[doc.kind]
   const canUpload = UPLOADER[doc.kind].includes(p.role)
@@ -96,81 +102,160 @@ function DocumentRow({ doc, internship }: { doc: InternshipDocument; internship:
 
   const defaultName = `${doc.kind.replace(/_/g, '-')}-${internship.id}.pdf`
 
-  return (
-    <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {doc.fileName
-            ? `${doc.fileName} · ${doc.uploadedBy === 'company' ? 'company' : 'student'} · ${doc.uploadedAt}`
-            : `Awaiting upload by ${UPLOADER[doc.kind].join(' / ')}`}
-        </p>
-        {doc.status === 'rejected' && doc.rejectReason && (
-          <p className="text-xs text-muted-foreground">Rejected: {doc.rejectReason}</p>
-        )}
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <StatusBadge status={doc.status} />
-        {doc.status !== 'not_uploaded' && <VerifyCodeDialog doc={doc} />}
-        {canUpload && pendingUpload && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setFileName(defaultName)
-              setUploadOpen(true)
-            }}
-          >
-            <Upload className="size-4" />
-            Upload
-          </Button>
-        )}
-        {canVerify && doc.status === 'uploaded' && (
-          <>
-            <Button size="sm" onClick={() => p.setDocumentStatus(doc.id, 'verified')}>
-              <Check className="size-4" />
-              Verify
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setRejectOpen(true)}>
-              Reject
-            </Button>
-          </>
-        )}
-      </div>
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedFile(file)
+      setFileName(file.name)
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setFileDataUrl(reader.result)
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+  }
 
+  const handleConfirmUpload = () => {
+    const finalName = fileName.trim() || defaultName
+    p.uploadDocument(
+      internship.id,
+      doc.kind,
+      finalName,
+      fileDataUrl || undefined,
+      selectedFile?.size,
+    )
+    setUploadOpen(false)
+    setSelectedFile(null)
+    setFileDataUrl(null)
+  }
+
+  return (
+    <>
+      <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{label}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {doc.fileName
+              ? `${doc.fileName} · ${doc.uploadedBy === 'company' ? 'company' : 'student'} · ${doc.uploadedAt}`
+              : `Awaiting upload by ${UPLOADER[doc.kind].join(' / ')}`}
+          </p>
+          {doc.status === 'rejected' && doc.rejectReason && (
+            <p className="text-xs text-destructive mt-0.5">Rejected: {doc.rejectReason}</p>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <StatusBadge status={doc.status} />
+
+          {/* View Document Action */}
+          {doc.status !== 'not_uploaded' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setViewOpen(true)}
+              className="text-xs"
+            >
+              <Eye className="mr-1 size-3.5" /> View
+            </Button>
+          )}
+
+          {doc.status !== 'not_uploaded' && <VerifyCodeDialog doc={doc} />}
+
+          {canUpload && pendingUpload && (
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => {
+                setFileName(defaultName)
+                setSelectedFile(null)
+                setFileDataUrl(null)
+                setUploadOpen(true)
+              }}
+              className="text-xs"
+            >
+              <Upload className="mr-1 size-3.5" /> Upload
+            </Button>
+          )}
+
+          {canVerify && doc.status === 'uploaded' && (
+            <>
+              <Button size="sm" onClick={() => p.setDocumentStatus(doc.id, 'verified')} className="text-xs">
+                <Check className="mr-1 size-3.5" /> Verify
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setRejectOpen(true)} className="text-xs">
+                Reject
+              </Button>
+            </>
+          )}
+        </div>
+      </li>
+
+      {/* View Document Modal */}
+      <DocumentViewerModal
+        open={viewOpen}
+        onOpenChange={setViewOpen}
+        doc={doc}
+        internship={internship}
+      />
+
+      {/* Interactive Upload Modal */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Upload {label.toLowerCase()}</DialogTitle>
+            <DialogTitle>Upload {label}</DialogTitle>
             <DialogDescription>
-              File uploads are simulated for the demo. The T&amp;P cell is notified to verify it.
+              Upload your official signed document (PDF, PNG, JPG). It will be recorded in the centralized portal.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={`file-${doc.id}`}>File name</Label>
-            <Input
-              id={`file-${doc.id}`}
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-            />
+
+          <div className="flex flex-col gap-4">
+            {/* File Drop / Select Area */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+            >
+              <Upload className="size-8 text-muted-foreground mb-2" />
+              <p className="text-xs font-semibold text-foreground">
+                {selectedFile ? selectedFile.name : 'Click to select document file'}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {selectedFile
+                  ? `${Math.round(selectedFile.size / 1024)} KB · Ready to upload`
+                  : 'PDF, DOCX, PNG, JPG up to 10 MB'}
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`file-${doc.id}`}>Document record name</Label>
+              <Input
+                id={`file-${doc.id}`}
+                value={fileName}
+                onChange={(e) => setFileName(e.target.value)}
+                placeholder={defaultName}
+              />
+            </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setUploadOpen(false)}>
               Cancel
             </Button>
-            <Button
-              disabled={!fileName.trim()}
-              onClick={() => {
-                p.uploadDocument(internship.id, doc.kind, fileName.trim())
-                setUploadOpen(false)
-              }}
-            >
-              Upload document
+            <Button onClick={handleConfirmUpload}>
+              Upload and Submit
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Rejection Modal */}
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -194,6 +279,7 @@ function DocumentRow({ doc, internship }: { doc: InternshipDocument; internship:
               Cancel
             </Button>
             <Button
+              variant="destructive"
               disabled={!reason.trim()}
               onClick={() => {
                 p.setDocumentStatus(doc.id, 'rejected', reason.trim())
@@ -206,7 +292,7 @@ function DocumentRow({ doc, internship }: { doc: InternshipDocument; internship:
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </li>
+    </>
   )
 }
 

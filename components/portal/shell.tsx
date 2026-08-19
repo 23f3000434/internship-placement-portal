@@ -245,129 +245,86 @@ function AuthRequired() {
   )
 }
 
-function RoleSwitcher() {
-  const { role, demoLogin, actingStudentId, actingCompanyId, students, companies } = usePortal()
-  const router = useRouter()
+function UserProfileCard() {
+  const { role, authSession, students, companies, actingStudentId, actingCompanyId } = usePortal()
+
+  const s = students.find((x) => x.id === (authSession?.userId || actingStudentId))
+  const c = companies.find((x) => x.id === (authSession?.userId || actingCompanyId))
+
+  const name =
+    role === 'student'
+      ? s?.name || authSession?.name || 'Aarav Sharma'
+      : role === 'company'
+        ? c?.name || authSession?.name || 'TechNova Systems'
+        : role === 'faculty'
+          ? 'Prof. R. Kulkarni'
+          : 'T&P Cell Admin'
+
+  const subtitle =
+    role === 'student'
+      ? `${s?.enrollment || 'EN21CS001'} · ${s?.branch || 'Computer Science'}`
+      : role === 'company'
+        ? `${c?.location || 'Corporate'} · ${c?.industry || 'Enterprise'}`
+        : role === 'faculty'
+          ? 'Faculty Mentor'
+          : 'Central Placement Office'
+
+  const initials = name
+    .split(' ')
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
 
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Demo role switcher
-      </span>
-      <div className="grid grid-cols-2 gap-1 rounded-md border p-1" role="group" aria-label="Switch role">
-        {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => {
-              demoLogin(r)
-              router.push('/dashboard')
-            }}
-            className={cn(
-              'rounded px-2 py-1.5 text-xs font-medium transition-colors',
-              role === r ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted',
-            )}
-            aria-pressed={role === r}
-          >
-            {ROLE_LABEL[r]}
-          </button>
-        ))}
+    <div className="flex items-center gap-3 rounded-lg border bg-card p-3 shadow-2xs">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background font-bold text-xs">
+        {initials}
       </div>
-      {role === 'student' && (
-        <Select
-          value={actingStudentId}
-          onValueChange={(v) => {
-            if (v) demoLogin('student', v)
-          }}
-        >
-          <SelectTrigger aria-label="Acting student" className="h-8 text-xs">
-            <SelectValue>
-              {(value: string) => {
-                const s = students.find((x) => x.id === value)
-                return s ? `${s.name} — ${s.status}` : 'Select student'
-              }}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {students.map((s) => (
-                <SelectItem key={s.id} value={s.id} className="text-xs">
-                  {s.name} — ${s.status}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      )}
-      {role === 'company' && (
-        <Select
-          value={actingCompanyId}
-          onValueChange={(v) => {
-            if (v) demoLogin('company', v)
-          }}
-        >
-          <SelectTrigger aria-label="Acting company" className="h-8 text-xs">
-            <SelectValue>
-              {(value: string) => {
-                const c = companies.find((x) => x.id === value)
-                return c ? `${c.name} — ${c.status}` : 'Select company'
-              }}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {companies.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-xs">
-                  {c.name} — ${c.status}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      )}
-    </div>
-  )
-}
-
-function DemoFooter() {
-  const { resetDemo, logout, authSession } = usePortal()
-  return (
-    <div className="flex flex-col items-start gap-2 border-t pt-3 px-2">
-      {authSession && (
-        <button
-          type="button"
-          onClick={logout}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <LogOut className="size-3.5" /> Sign out ({authSession.email})
-        </button>
-      )}
-      <p className="text-[11px] text-muted-foreground">Hackathon demo — local data only</p>
-      <button
-        type="button"
-        onClick={resetDemo}
-        className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-      >
-        Reset demo data
-      </button>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-semibold text-foreground">{name}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
+      </div>
+      <span className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
+        {ROLE_LABEL[role]}
+      </span>
     </div>
   )
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const { logout } = usePortal()
   return (
-    <div className="flex h-full flex-col gap-6 p-4">
-      <Link href="/" onClick={onNavigate} className="flex items-center gap-2 px-2">
+    <div className="flex h-full flex-col gap-5 p-4">
+      <Link href="/" onClick={onNavigate} className="flex items-center gap-2 px-1">
         <span className="flex size-7 items-center justify-center rounded bg-foreground text-background text-sm font-bold">
           IT
         </span>
-        <span className="text-sm font-semibold tracking-tight">InternTrack</span>
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold tracking-tight leading-none">InternTrack</span>
+          <span className="text-[10px] text-muted-foreground mt-0.5">GHRCEM Central Portal</span>
+        </div>
       </Link>
-      <RoleSwitcher />
+
+      <UserProfileCard />
+
       <div className="flex-1 overflow-y-auto">
         <NavLinks onNavigate={onNavigate} />
       </div>
-      <DemoFooter />
+
+      <div className="border-t pt-3 flex flex-col gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={logout}
+          className="w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+        >
+          <LogOut className="mr-2 size-3.5" /> Sign out
+        </Button>
+        <p className="text-[10px] text-muted-foreground text-center">
+          GHRCEM Placement Cell · 2026
+        </p>
+      </div>
     </div>
   )
 }

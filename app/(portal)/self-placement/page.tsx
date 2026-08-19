@@ -24,29 +24,67 @@ function UploadToggle({
   checked: boolean
   onChange: (v: boolean) => void
 }) {
+  const [fileName, setFileName] = useState<string | null>(null)
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) {
+      setFileName(f.name)
+      onChange(true)
+    }
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
+    <label
+      htmlFor={id}
       className={cn(
-        'flex items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
-        checked ? 'border-foreground' : 'border-dashed hover:bg-muted/50',
+        'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
+        checked ? 'border-foreground bg-muted/20' : 'border-dashed hover:bg-muted/50',
       )}
-      aria-pressed={checked}
-      id={id}
     >
+      <input
+        id={id}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+        className="sr-only"
+        onChange={handleFile}
+      />
       {checked ? (
-        <FileCheck className="size-4 shrink-0" aria-hidden />
+        <FileCheck className="size-4 shrink-0 text-foreground" aria-hidden />
       ) : (
         <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       )}
-      <span className="flex-1">
-        <span className={cn('block font-medium', !checked && 'text-muted-foreground')}>{label}</span>
+      <span className="flex-1 min-w-0">
+        <span className={cn('block font-medium truncate', !checked && 'text-muted-foreground')}>
+          {fileName || label}
+        </span>
         <span className="block text-xs text-muted-foreground">
-          {checked ? 'Uploaded (simulated)' : required ? 'Required — click to upload' : 'Optional — click to upload'}
+          {checked
+            ? fileName
+              ? `${fileName} · Attached`
+              : 'Document verified & attached'
+            : required
+              ? 'Required — click to select file'
+              : 'Optional — click to select file'}
         </span>
       </span>
-    </button>
+      {checked && (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setFileName(null)
+            onChange(false)
+          }}
+        >
+          Remove
+        </Button>
+      )}
+    </label>
   )
 }
 

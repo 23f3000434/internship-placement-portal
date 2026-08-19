@@ -33,7 +33,11 @@ export interface Student {
   certifications: string[]
   locationPreference: 'local' | 'outstation' | 'any'
   resumeUploaded: boolean
+  resumeName?: string
+  resumeData?: string
   idDocsUploaded: boolean
+  idDocsName?: string
+  idDocsData?: string
   status: VerificationStatus
   blockReason?: string
   facultyId: string
@@ -53,6 +57,8 @@ export interface Company {
   location: string
   about: string
   certificateUploaded: boolean
+  certificateName?: string
+  certificateData?: string
   status: VerificationStatus
   blockReason?: string
   addedByStudentId?: string
@@ -168,6 +174,8 @@ export interface InternshipDocument {
   internshipId: string
   kind: DocumentKind
   fileName?: string
+  fileData?: string
+  fileSize?: number
   uploadedBy?: 'student' | 'company'
   uploadedAt?: string
   status: DocumentStatus

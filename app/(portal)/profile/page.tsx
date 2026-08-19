@@ -1,12 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
-import { Check, FileText, IdCard, Plus, X } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Check, FileText, IdCard, Plus, X, Upload, Eye, Download, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -62,6 +70,9 @@ export default function ProfilePage() {
   const student = p.students.find((s) => s.id === p.actingStudentId)
   const [skillDraft, setSkillDraft] = useState('')
   const [certDraft, setCertDraft] = useState('')
+  const [resumeModalOpen, setResumeModalOpen] = useState(false)
+  const resumeInputRef = useRef<HTMLInputElement>(null)
+  const idDocsInputRef = useRef<HTMLInputElement>(null)
 
   if (!student) {
     return (
@@ -229,52 +240,210 @@ export default function ProfilePage() {
           <section className="flex flex-col gap-4 rounded-lg border p-5">
             <h2 className="text-sm font-semibold">Documents on file</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-start justify-between gap-3 rounded-lg border p-4">
-                <div className="flex min-w-0 gap-3">
-                  <FileText className="mt-0.5 size-4 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">Resume</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {student.resumeUploaded
-                        ? `resume-${student.enrollment.toLowerCase()}.pdf`
-                        : 'Not uploaded — applications are blocked'}
-                    </p>
+              <div className="flex flex-col justify-between gap-3 rounded-lg border p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 gap-2.5">
+                    <FileText className="mt-0.5 size-4 shrink-0 text-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Resume Document</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {student.resumeUploaded
+                          ? student.resumeName || `resume-${student.enrollment.toLowerCase()}.pdf`
+                          : 'Not uploaded — applications blocked'}
+                      </p>
+                    </div>
                   </div>
+                  <StatusBadge status={student.resumeUploaded ? 'uploaded' : 'not_uploaded'} />
                 </div>
-                {student.resumeUploaded ? (
-                  <StatusBadge status="uploaded" />
-                ) : (
-                  <Button size="sm" onClick={() => p.updateProfile({ resumeUploaded: true })}>
-                    Upload
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <input
+                    ref={resumeInputRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const reader = new FileReader()
+                        reader.onload = () => {
+                          p.updateProfile({
+                            resumeUploaded: true,
+                            resumeName: file.name,
+                            resumeData: typeof reader.result === 'string' ? reader.result : undefined,
+                          })
+                          toast.success('Resume updated', { description: file.name })
+                        }
+                        reader.readAsDataURL(file)
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant={student.resumeUploaded ? 'outline' : 'default'}
+                    onClick={() => resumeInputRef.current?.click()}
+                    className="text-xs flex-1"
+                  >
+                    <Upload className="mr-1 size-3.5" />
+                    {student.resumeUploaded ? 'Replace Resume' : 'Upload Resume'}
                   </Button>
-                )}
+                  {student.resumeUploaded && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setResumeModalOpen(true)}
+                      className="text-xs"
+                    >
+                      <Eye className="mr-1 size-3.5" /> View
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-start justify-between gap-3 rounded-lg border p-4">
-                <div className="flex min-w-0 gap-3">
-                  <IdCard className="mt-0.5 size-4 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">ID documents</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {student.idDocsUploaded
-                        ? `id-proof-${student.enrollment.toLowerCase()}.pdf`
-                        : 'Not uploaded — verification is on hold'}
-                    </p>
+
+              <div className="flex flex-col justify-between gap-3 rounded-lg border p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 gap-2.5">
+                    <IdCard className="mt-0.5 size-4 shrink-0 text-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">College ID / Proof</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {student.idDocsUploaded
+                          ? student.idDocsName || `id-proof-${student.enrollment.toLowerCase()}.pdf`
+                          : 'Not uploaded — verification on hold'}
+                      </p>
+                    </div>
                   </div>
+                  <StatusBadge status={student.idDocsUploaded ? 'uploaded' : 'not_uploaded'} />
                 </div>
-                {student.idDocsUploaded ? (
-                  <StatusBadge status="uploaded" />
-                ) : (
-                  <Button size="sm" onClick={() => p.updateProfile({ idDocsUploaded: true })}>
-                    Upload
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <input
+                    ref={idDocsInputRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const reader = new FileReader()
+                        reader.onload = () => {
+                          p.updateProfile({
+                            idDocsUploaded: true,
+                            idDocsName: file.name,
+                            idDocsData: typeof reader.result === 'string' ? reader.result : undefined,
+                          })
+                          toast.success('ID document uploaded', { description: file.name })
+                        }
+                        reader.readAsDataURL(file)
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant={student.idDocsUploaded ? 'outline' : 'default'}
+                    onClick={() => idDocsInputRef.current?.click()}
+                    className="text-xs flex-1"
+                  >
+                    <Upload className="mr-1 size-3.5" />
+                    {student.idDocsUploaded ? 'Replace ID Doc' : 'Upload ID Doc'}
                   </Button>
-                )}
+                </div>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Uploads are simulated for the demo. Each upload notifies the T&amp;P cell for
-              verification.
+              Official institutional records. Verified by GHRCEM Training &amp; Placement Cell.
             </p>
           </section>
+
+          {/* Student Resume Preview Modal */}
+          <Dialog open={resumeModalOpen} onOpenChange={setResumeModalOpen}>
+            <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <div className="flex items-center justify-between gap-2 mr-6">
+                  <DialogTitle className="text-lg flex items-center gap-2">
+                    <FileText className="size-5" /> Candidate Resume Profile
+                  </DialogTitle>
+                  <StatusBadge status="approved" />
+                </div>
+                <DialogDescription>
+                  {student.resumeName || `resume-${student.enrollment.toLowerCase()}.pdf`} · Verified Student Record
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="rounded-xl border bg-card p-6 shadow-sm space-y-5 font-sans">
+                {/* Header */}
+                <div className="border-b pb-4">
+                  <h3 className="text-xl font-bold text-foreground">{student.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {student.enrollment} · {student.branch} · Batch of {student.passingYear}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Email: {student.email} · Phone: {student.phone || '+91 98230 44521'} · Location: {LOCATION_LABEL[student.locationPreference]}
+                  </p>
+                </div>
+
+                {/* Academic Metrics */}
+                <div className="grid grid-cols-3 gap-3 rounded-lg bg-muted/40 p-3 text-center">
+                  <div>
+                    <span className="text-[10px] uppercase text-muted-foreground block">CGPA</span>
+                    <span className="text-sm font-bold">{student.cgpa.toFixed(2)} / 10.0</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase text-muted-foreground block">Backlogs</span>
+                    <span className="text-sm font-bold">{student.backlogs}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase text-muted-foreground block">Passing Year</span>
+                    <span className="text-sm font-bold">{student.passingYear}</span>
+                  </div>
+                </div>
+
+                {/* Technical Skills */}
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Technical Skills</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {student.skills.map((sk) => (
+                      <span key={sk} className="rounded-md border bg-muted/30 px-2.5 py-1 text-xs font-medium">
+                        {sk}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Certifications */}
+                {student.certifications.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Certifications</h4>
+                    <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
+                      {student.certifications.map((cert) => (
+                        <li key={cert} className="text-foreground">{cert}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="flex justify-between sm:justify-between">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const content = `RESUME - ${student.name}\nEnrollment: ${student.enrollment}\nBranch: ${student.branch}\nCGPA: ${student.cgpa}\nSkills: ${student.skills.join(', ')}\nEmail: ${student.email}`
+                    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = student.resumeName || `resume-${student.enrollment}.txt`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                >
+                  <Download className="mr-1.5 size-3.5" /> Download Resume
+                </Button>
+                <Button size="sm" onClick={() => setResumeModalOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 

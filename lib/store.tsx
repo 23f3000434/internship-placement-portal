@@ -99,7 +99,16 @@ function openDocumentLedger(internshipId: string, prefilled: DocumentKind[] = []
 export type StudentProfilePatch = Partial<
   Pick<
     Student,
-    'skills' | 'certifications' | 'resumeUploaded' | 'idDocsUploaded' | 'locationPreference' | 'phone'
+    | 'skills'
+    | 'certifications'
+    | 'resumeUploaded'
+    | 'resumeName'
+    | 'resumeData'
+    | 'idDocsUploaded'
+    | 'idDocsName'
+    | 'idDocsData'
+    | 'locationPreference'
+    | 'phone'
   >
 >
 
@@ -157,7 +166,13 @@ interface PortalState {
   setMilestoneStatus: (id: string, status: Milestone['status'], remark?: string) => void
   submitFeedback: (f: Omit<CompanyFeedback, 'id'>) => void
   submitFinalEvaluation: (internshipId: string, text: string) => void
-  uploadDocument: (internshipId: string, kind: DocumentKind, fileName: string) => void
+  uploadDocument: (
+    internshipId: string,
+    kind: DocumentKind,
+    fileName: string,
+    fileData?: string,
+    fileSize?: number,
+  ) => void
   setDocumentStatus: (id: string, status: DocumentStatus, reason?: string) => void
   setPpoStatus: (internshipId: string, status: PpoStatus, opts?: { ppoPackage?: number; note?: string }) => void
   submitSelfPlacement: (
@@ -770,15 +785,23 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     ppo_letter: 'PPO letter',
   }
 
-  const uploadDocument: PortalState['uploadDocument'] = (internshipId, kind, fileName) => {
+  const uploadDocument: PortalState['uploadDocument'] = (
+    internshipId,
+    kind,
+    fileName,
+    fileData,
+    fileSize,
+  ) => {
     setDocuments((prev) => {
       const existing = prev.find((d) => d.internshipId === internshipId && d.kind === kind)
       const next: Partial<InternshipDocument> = {
         fileName,
+        fileData: fileData ?? existing?.fileData,
+        fileSize: fileSize ?? existing?.fileSize,
         uploadedBy: role === 'company' ? 'company' : 'student',
         uploadedAt: today(),
         status: 'uploaded',
-        verifyCode: verifyCode(internshipId, kind),
+        verifyCode: existing?.verifyCode ?? verifyCode(internshipId, kind),
         rejectReason: undefined,
       }
       if (existing) {
@@ -788,7 +811,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     })
     notify('admin', 'Document uploaded', `${docLabels[kind]} uploaded and awaiting T&P verification.`)
     toast.success(`${docLabels[kind]} uploaded`, {
-      description: 'Sent to the T&P cell for verification.',
+      description: 'Document saved and sent to T&P cell for verification.',
     })
   }
 
