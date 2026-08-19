@@ -1,0 +1,277 @@
+'use client'
+
+import { useState } from 'react'
+import { Check, FileCheck, FileUp, Minus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { PageHeader } from '@/components/portal/page-header'
+import { StatusBadge } from '@/components/portal/status-badge'
+import { usePortal } from '@/lib/store'
+import { cn } from '@/lib/utils'
+
+function UploadToggle({
+  id,
+  label,
+  required,
+  checked,
+  onChange,
+}: {
+  id: string
+  label: string
+  required?: boolean
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'flex items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
+        checked ? 'border-foreground' : 'border-dashed hover:bg-muted/50',
+      )}
+      aria-pressed={checked}
+      id={id}
+    >
+      {checked ? (
+        <FileCheck className="size-4 shrink-0" aria-hidden />
+      ) : (
+        <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      )}
+      <span className="flex-1">
+        <span className={cn('block font-medium', !checked && 'text-muted-foreground')}>{label}</span>
+        <span className="block text-xs text-muted-foreground">
+          {checked ? 'Uploaded (simulated)' : required ? 'Required — click to upload' : 'Optional — click to upload'}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+export default function SelfPlacementPage() {
+  const p = usePortal()
+  const me = p.students.find((s) => s.id === p.actingStudentId)
+  const mine = p.selfPlacements.filter((sp) => sp.studentId === p.actingStudentId).slice().reverse()
+
+  const [companyName, setCompanyName] = useState('')
+  const [role, setRole] = useState('')
+  const [location, setLocation] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [stipend, setStipend] = useState('')
+  const [offerLetter, setOfferLetter] = useState(false)
+  const [joiningLetter, setJoiningLetter] = useState(false)
+  const [certificate, setCertificate] = useState(false)
+  const [noc, setNoc] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+
+  const valid =
+    companyName.trim() &&
+    role.trim() &&
+    location.trim() &&
+    startDate &&
+    endDate &&
+    offerLetter &&
+    joiningLetter &&
+    confirm
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!valid) return
+    p.submitSelfPlacement({
+      companyName: companyName.trim(),
+      role: role.trim(),
+      location: location.trim(),
+      startDate,
+      endDate,
+      stipend: Number(stipend) || 0,
+      offerLetterUploaded: offerLetter,
+      joiningLetterUploaded: joiningLetter,
+      certificateUploaded: certificate,
+      nocUploaded: noc,
+    })
+    setCompanyName('')
+    setRole('')
+    setLocation('')
+    setStartDate('')
+    setEndDate('')
+    setStipend('')
+    setOfferLetter(false)
+    setJoiningLetter(false)
+    setCertificate(false)
+    setNoc(false)
+    setConfirm(false)
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Self-placed internship"
+        description="Found an internship on your own? Register it here — faculty verifies your documents before tracking begins."
+      />
+      <div className="grid gap-6 lg:grid-cols-5">
+        <form onSubmit={submit} className="flex flex-col gap-5 rounded-lg border p-5 lg:col-span-3">
+          <h2 className="text-sm font-semibold">New self-placement submission</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="sp-company">Company name</Label>
+              <Input
+                id="sp-company"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="e.g. Precision Auto Components"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="sp-role">Role / designation</Label>
+              <Input
+                id="sp-role"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                placeholder="e.g. CAD Intern"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="sp-location">Internship location (city)</Label>
+              <Input
+                id="sp-location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Nashik — use Remote if you work from home"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="sp-start">Start date</Label>
+              <Input
+                id="sp-start"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="sp-end">End date</Label>
+              <Input
+                id="sp-end"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="sp-stipend">Stipend (₹/month)</Label>
+              <Input
+                id="sp-stipend"
+                type="number"
+                min="0"
+                value={stipend}
+                onChange={(e) => setStipend(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-sm font-medium">Documents</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <UploadToggle id="sp-offer" label="Offer letter" required checked={offerLetter} onChange={setOfferLetter} />
+              <UploadToggle id="sp-joining" label="Joining letter" required checked={joiningLetter} onChange={setJoiningLetter} />
+              <UploadToggle id="sp-cert" label="Internship certificate" checked={certificate} onChange={setCertificate} />
+              <UploadToggle id="sp-noc" label="NOC from college" checked={noc} onChange={setNoc} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The certificate can be uploaded later, after the internship completes. NOC is optional.
+            </p>
+          </fieldset>
+          <div className="flex items-start gap-2">
+            <Checkbox
+              id="sp-confirm"
+              checked={confirm}
+              onCheckedChange={(v) => setConfirm(v === true)}
+            />
+            <Label htmlFor="sp-confirm" className="text-sm font-normal leading-snug text-muted-foreground">
+              I confirm the details are accurate and understand that faculty will verify these
+              documents before the internship is approved.
+            </Label>
+          </div>
+          <div>
+            <Button type="submit" disabled={!valid || me?.status !== 'approved'}>
+              Submit for faculty verification
+            </Button>
+            {me?.status !== 'approved' && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Your account must be verified before submitting a self-placement.
+              </p>
+            )}
+          </div>
+        </form>
+
+        <section className="flex flex-col gap-3 lg:col-span-2">
+          <h2 className="text-sm font-semibold">My submissions</h2>
+          <ul className="flex flex-col gap-3">
+            {mine.map((sp) => (
+              <li key={sp.id} className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{sp.companyName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {sp.role}
+                      {sp.location && ` · ${sp.location}`} · {sp.startDate} → {sp.endDate}
+                      {sp.stipend > 0 && ` · ₹${sp.stipend.toLocaleString('en-IN')}/mo`}
+                    </p>
+                  </div>
+                  <StatusBadge status={sp.status} />
+                </div>
+                <ul className="flex flex-wrap gap-1.5 text-xs">
+                  {[
+                    ['Offer letter', sp.offerLetterUploaded],
+                    ['Joining letter', sp.joiningLetterUploaded],
+                    ['Certificate', sp.certificateUploaded],
+                    ['NOC', sp.nocUploaded],
+                  ].map(([label, uploaded]) => (
+                    <li
+                      key={label as string}
+                      className={cn(
+                        'flex items-center gap-1 rounded-full border px-2 py-0.5',
+                        uploaded
+                          ? 'border-foreground font-medium'
+                          : 'border-dashed text-muted-foreground',
+                      )}
+                    >
+                      {uploaded ? (
+                        <Check className="size-3" aria-hidden />
+                      ) : (
+                        <Minus className="size-3" aria-hidden />
+                      )}
+                      {label as string}
+                      <span className="sr-only">{uploaded ? 'uploaded' : 'not uploaded'}</span>
+                    </li>
+                  ))}
+                </ul>
+                {sp.status === 'rejected' && sp.reason && (
+                  <p className="text-xs text-muted-foreground">Reason: {sp.reason}</p>
+                )}
+                {sp.status === 'approved' && (
+                  <p className="text-xs text-muted-foreground">
+                    Approved by faculty — internship tracking is active.
+                  </p>
+                )}
+              </li>
+            ))}
+            {mine.length === 0 && (
+              <li className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                No self-placements submitted yet.
+              </li>
+            )}
+          </ul>
+        </section>
+      </div>
+    </>
+  )
+}
