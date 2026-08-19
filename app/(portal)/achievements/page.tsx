@@ -36,7 +36,9 @@ export default function AchievementsPage() {
   const [date, setDate] = useState(isoDate(-14))
   const [evidence, setEvidence] = useState(false)
 
-  const valid = title.trim().length > 0 && date && evidence
+  const todayStr = isoDate(0)
+  const isDateValid = Boolean(date && date <= todayStr)
+  const valid = title.trim().length > 0 && isDateValid && evidence
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -93,8 +95,18 @@ export default function AchievementsPage() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ac-date">Date</Label>
-            <Input id="ac-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <Label htmlFor="ac-date">Date achieved</Label>
+            <Input
+              id="ac-date"
+              type="date"
+              max={todayStr}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+            {!isDateValid && (
+              <span className="text-[11px] text-destructive">Achievement date cannot be in the future.</span>
+            )}
           </div>
           <button
             type="button"

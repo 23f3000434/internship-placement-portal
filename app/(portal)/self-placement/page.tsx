@@ -66,6 +66,7 @@ export default function SelfPlacementPage() {
   const [certificate, setCertificate] = useState(false)
   const [noc, setNoc] = useState(false)
   const [confirm, setConfirm] = useState(false)
+  const dateRangeValid = !startDate || !endDate || new Date(endDate) > new Date(startDate)
 
   const valid =
     companyName.trim() &&
@@ -73,13 +74,14 @@ export default function SelfPlacementPage() {
     location.trim() &&
     startDate &&
     endDate &&
+    dateRangeValid &&
     offerLetter &&
     joiningLetter &&
     confirm
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!valid) return
+    if (!valid || !dateRangeValid) return
     p.submitSelfPlacement({
       companyName: companyName.trim(),
       role: role.trim(),
@@ -109,11 +111,14 @@ export default function SelfPlacementPage() {
     <>
       <PageHeader
         title="Self-placed internship"
-        description="Found an internship on your own? Register it here — faculty verifies your documents before tracking begins."
+        description="Register an off-campus internship found independently. Faculty verifies the offer and joining letters before credits are approved."
       />
       <div className="grid gap-6 lg:grid-cols-5">
-        <form onSubmit={submit} className="flex flex-col gap-5 rounded-lg border p-5 lg:col-span-3">
-          <h2 className="text-sm font-semibold">New self-placement submission</h2>
+        <form onSubmit={submit} className="flex flex-col gap-6 rounded-lg border bg-card p-5 lg:col-span-3">
+          <div>
+            <h2 className="text-sm font-semibold">Internship details</h2>
+            <p className="text-xs text-muted-foreground">All fields except stipend are mandatory.</p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5 sm:col-span-2">
               <Label htmlFor="sp-company">Company name</Label>
@@ -160,10 +165,16 @@ export default function SelfPlacementPage() {
               <Input
                 id="sp-end"
                 type="date"
+                min={startDate || undefined}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 required
               />
+              {!dateRangeValid && (
+                <span className="text-[11px] text-destructive font-medium">
+                  End date must be after start date.
+                </span>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="sp-stipend">Stipend (₹/month)</Label>

@@ -22,6 +22,7 @@ import { AiResumeScoreCard } from '@/components/portal/ai-copilot'
 import { usePortal } from '@/lib/store'
 import { checkEligibility, skillGap } from '@/lib/eligibility'
 import type { Student } from '@/lib/types'
+import { toast } from 'sonner'
 
 const LOCATION_LABEL: Record<Student['locationPreference'], string> = {
   local: 'Local only',
@@ -84,27 +85,40 @@ export default function ProfilePage() {
   const gaps = skillGap(student, p.drives)
 
   // Profile completeness drives the eligibility engine, so show exactly what is missing.
+  const hasPhone = Boolean(student.phone && student.phone.trim().length > 0)
   const checklist = [
-    { label: 'Resume uploaded', done: student.resumeUploaded },
-    { label: 'ID documents uploaded', done: student.idDocsUploaded },
+    { label: 'Resume uploaded', done: Boolean(student.resumeUploaded) },
+    { label: 'ID documents uploaded', done: Boolean(student.idDocsUploaded) },
     { label: 'At least three skills listed', done: student.skills.length >= 3 },
     { label: 'Certification on record', done: student.certifications.length > 0 },
-    { label: 'Contact number added', done: Boolean(student.phone) },
+    { label: 'Contact number added', done: hasPhone },
     { label: 'Profile verified by T&P', done: student.status === 'approved' },
   ]
   const completeness = Math.round((checklist.filter((c) => c.done).length / checklist.length) * 100)
 
   const addSkill = () => {
     const v = skillDraft.trim()
-    if (!v || student.skills.some((s) => s.toLowerCase() === v.toLowerCase())) return
+    if (!v) return
+    if (student.skills.some((s) => s.toLowerCase() === v.toLowerCase())) {
+      toast.error(`Skill "${v}" is already added to your profile.`)
+      setSkillDraft('')
+      return
+    }
     p.updateProfile({ skills: [...student.skills, v] })
+    toast.success(`Skill "${v}" added`)
     setSkillDraft('')
   }
 
   const addCert = () => {
     const v = certDraft.trim()
-    if (!v || student.certifications.some((c) => c.toLowerCase() === v.toLowerCase())) return
+    if (!v) return
+    if (student.certifications.some((c) => c.toLowerCase() === v.toLowerCase())) {
+      toast.error(`Certification "${v}" is already listed.`)
+      setCertDraft('')
+      return
+    }
     p.updateProfile({ certifications: [...student.certifications, v] })
+    toast.success(`Certification "${v}" added`)
     setCertDraft('')
   }
 

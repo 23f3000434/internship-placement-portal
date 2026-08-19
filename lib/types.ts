@@ -10,10 +10,20 @@ export type ApplicationStatus =
   | 'selected'
   | 'rejected'
 
+export interface AuthSession {
+  userId: string
+  name: string
+  email: string
+  role: Role
+  token: string
+  signedInAt: string
+}
+
 export interface Student {
   id: string
   name: string
   email: string
+  password?: string
   enrollment: string
   branch: string
   cgpa: number
@@ -34,6 +44,8 @@ export interface Student {
 export interface Company {
   id: string
   name: string
+  email?: string
+  password?: string
   industry: string
   website: string
   hrName: string
@@ -106,12 +118,19 @@ export interface WeeklyReport {
   status: 'submitted' | 'company_approved' | 'faculty_reviewed' | 'flagged'
 }
 
+export interface AttendanceDayEntry {
+  date: string
+  status: 'present' | 'absent' | 'leave'
+}
+
 export interface AttendanceRecord {
   internshipId: string
   workingDays: number
   present: number
   absent: number
   leave: number
+  lastMarkedDate?: string
+  entries?: AttendanceDayEntry[]
 }
 
 export interface Milestone {

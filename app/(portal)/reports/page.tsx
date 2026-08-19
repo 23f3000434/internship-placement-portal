@@ -19,17 +19,23 @@ export default function ReportsPage() {
     ? p.weeklyReports.filter((w) => w.internshipId === active.id).sort((a, b) => b.week - a.week)
     : []
   const nextWeek = reports.length > 0 ? Math.max(...reports.map((r) => r.week)) + 1 : 1
+  const startDateObj = active ? new Date(active.startDate) : new Date()
+  const nowObj = new Date()
+  const msDiff = Math.max(0, nowObj.getTime() - startDateObj.getTime())
+  const elapsedWeeks = Math.max(1, Math.ceil(msDiff / (7 * 24 * 60 * 60 * 1000)))
+  const maxSubmittableWeek = Math.max(elapsedWeeks, 4) // Allow up to current elapsed week
+  const canSubmit = nextWeek <= maxSubmittableWeek
 
   const [workDone, setWorkDone] = useState('')
   const [skillsLearned, setSkillsLearned] = useState('')
   const [hours, setHours] = useState('40')
   const [evidence, setEvidence] = useState(false)
 
-  const valid = workDone.trim().length > 0 && skillsLearned.trim().length > 0 && Number(hours) > 0
+  const valid = workDone.trim().length > 0 && skillsLearned.trim().length > 0 && Number(hours) > 0 && canSubmit
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!valid || !active) return
+    if (!valid || !active || !canSubmit) return
     p.submitWeeklyReport({
       internshipId: active.id,
       week: nextWeek,

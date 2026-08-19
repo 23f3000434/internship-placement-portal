@@ -34,6 +34,7 @@ import { StatusBadge } from '@/components/portal/status-badge'
 import { isoDate } from '@/lib/eligibility'
 import { usePortal } from '@/lib/store'
 import type { Application, Student } from '@/lib/types'
+import { toast } from 'sonner'
 
 function ProfileDialog({
   student,
@@ -135,7 +136,11 @@ export default function ApplicantsPage() {
 
   const confirmReject = () => {
     if (!rejecting) return
-    p.setApplicationStatus(rejecting.id, 'rejected', rejectReason.trim() || 'Not a fit for this role.')
+    if (!rejectReason.trim()) {
+      toast.error('Rejection Reason Required', { description: 'Please explain why the candidate is not selected.' })
+      return
+    }
+    p.setApplicationStatus(rejecting.id, 'rejected', rejectReason.trim())
     setRejecting(null)
     setRejectReason('')
   }
@@ -324,7 +329,13 @@ export default function ApplicantsPage() {
             <Button variant="outline" onClick={() => setRejecting(null)}>
               Cancel
             </Button>
-            <Button onClick={confirmReject}>Reject applicant</Button>
+            <Button
+              variant="destructive"
+              disabled={!rejectReason.trim()}
+              onClick={confirmReject}
+            >
+              Reject applicant
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -43,13 +43,23 @@ export default function DrivesPage() {
   const [field, setField] = useState('all')
   const [mode, setMode] = useState('all')
   const [location, setLocation] = useState('all')
+  const [eligibleOnly, setEligibleOnly] = useState(false)
 
   const fields = useMemo(() => Array.from(new Set(p.drives.map((d) => d.field))), [p.drives])
   const locations = useMemo(() => Array.from(new Set(p.drives.map((d) => d.location))), [p.drives])
 
+  const eligibleCount = useMemo(
+    () => (me ? p.drives.filter((d) => checkEligibility(me, d).state === 'eligible').length : 0),
+    [p.drives, me],
+  )
+
   const filtered = p.drives.filter((d) => {
     const company = p.companies.find((c) => c.id === d.companyId)
     if (company?.status !== 'approved') return false
+    if (eligibleOnly && me) {
+      const elig = checkEligibility(me, d)
+      if (elig.state !== 'eligible') return false
+    }
     if (query && !`${d.title} ${company?.name} ${d.skills.join(' ')}`.toLowerCase().includes(query.toLowerCase()))
       return false
     if (field !== 'all' && d.field !== field) return false
@@ -62,7 +72,18 @@ export default function DrivesPage() {
     <>
       <PageHeader
         title="Discover internship drives"
-        description="Eligibility is checked automatically against your profile for every drive."
+        description="Eligibility is checked automatically against your academic profile for every drive."
+        actions={
+          me && (
+            <Button
+              variant={eligibleOnly ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setEligibleOnly(!eligibleOnly)}
+            >
+              {eligibleOnly ? `✓ Eligible Only (${eligibleCount})` : `Show Eligible Only (${eligibleCount} available)`}
+            </Button>
+          )
+        }
       />
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <div className="relative flex-1">

@@ -47,7 +47,27 @@ export default function VerificationsPage() {
   const pendingCompanies = p.companies.filter((c) => c.status === 'pending')
 
   const [rejectTarget, setRejectTarget] = useState<{ kind: 'student' | 'company'; id: string; name: string } | null>(null)
+  const [warningTarget, setWarningTarget] = useState<{ kind: 'student' | 'company'; id: string; name: string; missing: string } | null>(null)
   const [reason, setReason] = useState('')
+
+  const handleApproveStudent = (s: typeof pendingStudents[0]) => {
+    const missing: string[] = []
+    if (!s.resumeUploaded) missing.push('Resume')
+    if (!s.idDocsUploaded) missing.push('College ID / Identity Document')
+    if (missing.length > 0) {
+      setWarningTarget({ kind: 'student', id: s.id, name: s.name, missing: missing.join(' and ') })
+    } else {
+      p.verifyStudent(s.id, true)
+    }
+  }
+
+  const handleApproveCompany = (c: typeof pendingCompanies[0]) => {
+    if (!c.certificateUploaded) {
+      setWarningTarget({ kind: 'company', id: c.id, name: c.name, missing: 'Registration / Incorporation Certificate' })
+    } else {
+      p.verifyCompany(c.id, true)
+    }
+  }
 
   const confirmReject = () => {
     if (!rejectTarget) return
@@ -56,6 +76,13 @@ export default function VerificationsPage() {
     else p.verifyCompany(rejectTarget.id, false, r)
     setRejectTarget(null)
     setReason('')
+  }
+
+  const confirmWarningApprove = () => {
+    if (!warningTarget) return
+    if (warningTarget.kind === 'student') p.verifyStudent(warningTarget.id, true)
+    else p.verifyCompany(warningTarget.id, true)
+    setWarningTarget(null)
   }
 
   return (
@@ -92,7 +119,7 @@ export default function VerificationsPage() {
                   ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-                  <Button size="sm" onClick={() => p.verifyStudent(s.id, true)}>
+                  <Button size="sm" onClick={() => handleApproveStudent(s)}>
                     Approve
                   </Button>
                   <Button
@@ -158,7 +185,7 @@ export default function VerificationsPage() {
                   <DocChip ok={c.certificateUploaded} label="Registration certificate" />
                 </div>
                 <div className="flex gap-2 border-t pt-4">
-                  <Button size="sm" onClick={() => p.verifyCompany(c.id, true)}>
+                  <Button size="sm" onClick={() => handleApproveCompany(c)}>
                     Approve
                   </Button>
                   <Button
@@ -180,6 +207,30 @@ export default function VerificationsPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Warning Confirmation Dialog for Missing Documents */}
+      <Dialog open={!!warningTarget} onOpenChange={(o) => !o && setWarningTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Warning: Mandatory Document Missing</DialogTitle>
+            <DialogDescription>
+              {warningTarget?.name} has not uploaded: <strong>{warningTarget?.missing}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            According to college placement regulations, students and companies should provide valid credentials. Are you sure you want to override and grant administrative approval?
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWarningTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="default" onClick={confirmWarningApprove}>
+              Override &amp; Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rejection Dialog */}
       <Dialog open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
         <DialogContent>
           <DialogHeader>

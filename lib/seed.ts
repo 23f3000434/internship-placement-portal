@@ -23,6 +23,7 @@ export const seedStudents: Student[] = [
     id: 's1',
     name: 'Aarav Sharma',
     email: 'aarav.sharma@college.edu',
+    password: 'password123',
     enrollment: 'EN21CS001',
     branch: 'Computer Science',
     cgpa: 8.7,
@@ -41,6 +42,7 @@ export const seedStudents: Student[] = [
     id: 's2',
     name: 'Priya Patel',
     email: 'priya.patel@college.edu',
+    password: 'password123',
     enrollment: 'EN21CS014',
     branch: 'Computer Science',
     cgpa: 9.1,
@@ -59,6 +61,7 @@ export const seedStudents: Student[] = [
     id: 's3',
     name: 'Rohan Verma',
     email: 'rohan.verma@college.edu',
+    password: 'password123',
     enrollment: 'EN21EC022',
     branch: 'Electronics',
     cgpa: 7.2,
@@ -78,6 +81,7 @@ export const seedStudents: Student[] = [
     id: 's4',
     name: 'Sneha Iyer',
     email: 'sneha.iyer@college.edu',
+    password: 'password123',
     enrollment: 'EN21ME010',
     branch: 'Mechanical',
     cgpa: 8.0,
@@ -96,6 +100,7 @@ export const seedStudents: Student[] = [
     id: 's5',
     name: 'Kabir Singh',
     email: 'kabir.singh@college.edu',
+    password: 'password123',
     enrollment: 'EN22CS031',
     branch: 'Computer Science',
     cgpa: 6.9,
@@ -103,7 +108,7 @@ export const seedStudents: Student[] = [
     passingYear: 2027,
     skills: ['Java', 'Spring'],
     certifications: [],
-    phone: '+91 98220 11031',
+    phone: '',
     locationPreference: 'any',
     resumeUploaded: true,
     idDocsUploaded: false,
@@ -114,6 +119,7 @@ export const seedStudents: Student[] = [
     id: 's6',
     name: 'Ananya Rao',
     email: 'ananya.rao@college.edu',
+    password: 'password123',
     enrollment: 'EN22IT005',
     branch: 'Information Technology',
     cgpa: 8.4,
@@ -132,6 +138,7 @@ export const seedStudents: Student[] = [
     id: 's7',
     name: 'Dev Mehta',
     email: 'dev.mehta@college.edu',
+    password: 'password123',
     enrollment: 'EN21CS044',
     branch: 'Computer Science',
     cgpa: 7.8,
@@ -151,6 +158,7 @@ export const seedStudents: Student[] = [
     id: 's8',
     name: 'Isha Kulkarni',
     email: 'isha.kulkarni@college.edu',
+    password: 'password123',
     enrollment: 'EN21CS050',
     branch: 'Computer Science',
     cgpa: 9.3,
@@ -171,6 +179,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c1',
     name: 'TechNova Systems',
+    email: 'hr@technova.example.com',
+    password: 'password123',
     industry: 'Software',
     website: 'https://technova.example.com',
     hrName: 'Meera Joshi',
@@ -183,6 +193,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c2',
     name: 'DataForge Analytics',
+    email: 'talent@dataforge.example.com',
+    password: 'password123',
     industry: 'Data & AI',
     website: 'https://dataforge.example.com',
     hrName: 'Arjun Nair',
@@ -195,6 +207,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c3',
     name: 'MechWorks Industries',
+    email: 'careers@mechworks.example.com',
+    password: 'password123',
     industry: 'Manufacturing',
     website: 'https://mechworks.example.com',
     hrName: 'Sunita Desai',
@@ -207,6 +221,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c4',
     name: 'CloudPeak Labs',
+    email: 'people@cloudpeak.example.com',
+    password: 'password123',
     industry: 'Cloud Infrastructure',
     website: 'https://cloudpeak.example.com',
     hrName: 'Vikram Shah',
@@ -219,6 +235,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c5',
     name: 'FinEdge Capital',
+    email: 'hr@finedge.example.com',
+    password: 'password123',
     industry: 'FinTech',
     website: 'https://finedge.example.com',
     hrName: 'Ritu Malhotra',
@@ -406,7 +424,7 @@ export const seedApplications: Application[] = [
   {
     id: 'a1',
     driveId: 'd1',
-    studentId: 's2',
+    studentId: 's8',
     status: 'shortlisted',
     appliedAt: daysFromNow(-12),
     history: [
@@ -445,7 +463,7 @@ export const seedApplications: Application[] = [
   {
     id: 'a4',
     driveId: 'd1',
-    studentId: 's8',
+    studentId: 's1',
     status: 'under_review',
     appliedAt: daysFromNow(-4),
     history: [
@@ -673,9 +691,36 @@ export const seedWeeklyReports: WeeklyReport[] = [
 ]
 
 export const seedAttendance: AttendanceRecord[] = [
-  { internshipId: 'n1', workingDays: 15, present: 14, absent: 1, leave: 0 },
-  { internshipId: 'n2', workingDays: 60, present: 58, absent: 1, leave: 1 },
-  { internshipId: 'n3', workingDays: 60, present: 44, absent: 12, leave: 4 },
+  {
+    internshipId: 'n1',
+    workingDays: 15,
+    present: 14,
+    absent: 1,
+    leave: 0,
+    lastMarkedDate: daysFromNow(-1),
+    entries: [
+      { date: daysFromNow(-1), status: 'present' },
+      { date: daysFromNow(-2), status: 'present' },
+      { date: daysFromNow(-3), status: 'present' },
+      { date: daysFromNow(-4), status: 'absent' },
+    ],
+  },
+  {
+    internshipId: 'n2',
+    workingDays: 60,
+    present: 58,
+    absent: 1,
+    leave: 1,
+    lastMarkedDate: daysFromNow(-120),
+  },
+  {
+    internshipId: 'n3',
+    workingDays: 60,
+    present: 44,
+    absent: 12,
+    leave: 4,
+    lastMarkedDate: daysFromNow(-100),
+  },
 ]
 
 export const seedMilestones: Milestone[] = [

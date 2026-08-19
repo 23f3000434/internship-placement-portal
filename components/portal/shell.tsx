@@ -16,6 +16,9 @@ import {
   LayoutDashboard,
   ListChecks,
   Lock,
+  LogOut,
+  LogIn,
+  KeyRound,
   Mail,
   Menu,
   ScrollText,
@@ -211,8 +214,39 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
+function AuthRequired() {
+  const { demoLogin } = usePortal()
+  return (
+    <section role="alert" className="flex flex-col items-start gap-4 rounded-lg border border-dashed p-8">
+      <span className="flex size-10 items-center justify-center rounded-full border">
+        <Lock className="size-4" aria-hidden="true" />
+      </span>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-lg font-semibold">Authentication Required</h1>
+        <p className="max-w-prose text-sm text-muted-foreground">
+          You must be signed in to access this portal page. Please sign in with your credentials or select a demo persona below.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" render={<Link href="/signin" />}>
+          <LogIn className="mr-1.5 size-3.5" /> Sign in with credentials
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => demoLogin('student')}>
+          Sign in as Student (Priya)
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => demoLogin('admin')}>
+          Sign in as Admin / T&amp;P
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => demoLogin('faculty')}>
+          Sign in as Faculty
+        </Button>
+      </div>
+    </section>
+  )
+}
+
 function RoleSwitcher() {
-  const { role, setRole, actingStudentId, setActingStudentId, actingCompanyId, setActingCompanyId, students, companies } = usePortal()
+  const { role, demoLogin, actingStudentId, actingCompanyId, students, companies } = usePortal()
   const router = useRouter()
 
   return (
@@ -226,7 +260,7 @@ function RoleSwitcher() {
             key={r}
             type="button"
             onClick={() => {
-              setRole(r)
+              demoLogin(r)
               router.push('/dashboard')
             }}
             className={cn(
@@ -242,7 +276,9 @@ function RoleSwitcher() {
       {role === 'student' && (
         <Select
           value={actingStudentId}
-          onValueChange={(v) => setActingStudentId(v ?? actingStudentId)}
+          onValueChange={(v) => {
+            if (v) demoLogin('student', v)
+          }}
         >
           <SelectTrigger aria-label="Acting student" className="h-8 text-xs">
             <SelectValue>
@@ -256,7 +292,7 @@ function RoleSwitcher() {
             <SelectGroup>
               {students.map((s) => (
                 <SelectItem key={s.id} value={s.id} className="text-xs">
-                  {s.name} — {s.status}
+                  {s.name} — ${s.status}
                 </SelectItem>
               ))}
             </SelectGroup>
@@ -266,7 +302,9 @@ function RoleSwitcher() {
       {role === 'company' && (
         <Select
           value={actingCompanyId}
-          onValueChange={(v) => setActingCompanyId(v ?? actingCompanyId)}
+          onValueChange={(v) => {
+            if (v) demoLogin('company', v)
+          }}
         >
           <SelectTrigger aria-label="Acting company" className="h-8 text-xs">
             <SelectValue>
@@ -280,7 +318,7 @@ function RoleSwitcher() {
             <SelectGroup>
               {companies.map((c) => (
                 <SelectItem key={c.id} value={c.id} className="text-xs">
-                  {c.name} — {c.status}
+                  {c.name} — ${c.status}
                 </SelectItem>
               ))}
             </SelectGroup>
@@ -292,10 +330,19 @@ function RoleSwitcher() {
 }
 
 function DemoFooter() {
-  const { resetDemo } = usePortal()
+  const { resetDemo, logout, authSession } = usePortal()
   return (
-    <div className="flex flex-col items-start gap-1 px-2">
-      <p className="text-xs text-muted-foreground">Hackathon demo — local data only</p>
+    <div className="flex flex-col items-start gap-2 border-t pt-3 px-2">
+      {authSession && (
+        <button
+          type="button"
+          onClick={logout}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <LogOut className="size-3.5" /> Sign out ({authSession.email})
+        </button>
+      )}
+      <p className="text-[11px] text-muted-foreground">Hackathon demo — local data only</p>
       <button
         type="button"
         onClick={resetDemo}
@@ -326,7 +373,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function PortalShell({ children }: { children: React.ReactNode }) {
-  const { role, notifications, students, companies, actingStudentId, actingCompanyId } = usePortal()
+  const { role, authSession, logout, notifications, students, companies, actingStudentId, actingCompanyId } = usePortal()
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const unread = notifications.filter((n) => n.forRole === role && !n.read).length
@@ -369,6 +416,25 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
               {ROLE_LABEL[role]}
             </span>
           </div>
+          {authSession ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="text-xs text-muted-foreground hover:text-foreground hidden sm:flex"
+            >
+              <LogOut className="mr-1.5 size-3.5" /> Sign out
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href="/signin" />}
+              className="text-xs hidden sm:flex"
+            >
+              <LogIn className="mr-1.5 size-3.5" /> Sign in
+            </Button>
+          )}
           <Button variant="outline" size="icon" aria-label={`Notifications, ${unread} unread`} className="relative"
             render={<Link href="/notifications" />}
           >
@@ -382,7 +448,13 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="flex-1 p-4 md:p-6 lg:p-8">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-            {permitted ? children : <AccessDenied pathname={pathname} role={role} />}
+            {!authSession ? (
+              <AuthRequired />
+            ) : permitted ? (
+              children
+            ) : (
+              <AccessDenied pathname={pathname} role={role} />
+            )}
           </div>
         </main>
       </div>

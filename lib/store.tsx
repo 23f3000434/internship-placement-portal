@@ -8,6 +8,7 @@ import type {
   ApplicationStatus,
   AttendanceRecord,
   AuditEntry,
+  AuthSession,
   Company,
   CompanyFeedback,
   Drive,
@@ -46,6 +47,7 @@ import {
   seedThreads,
   seedWeeklyReports,
 } from './seed'
+import { checkEligibility } from './eligibility'
 
 const SNAPSHOT_KEY = 'interntrack.demo.v1'
 
@@ -102,6 +104,11 @@ export type StudentProfilePatch = Partial<
 >
 
 interface PortalState {
+  authSession: AuthSession | null
+  login: (email: string, pass: string, targetRole?: Role) => { success: boolean; error?: string }
+  demoLogin: (role: Role, personaId?: string) => void
+  logout: () => void
+
   role: Role
   setRole: (r: Role) => void
   actingStudentId: string
@@ -180,6 +187,15 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const [actingCompanyId, setActingCompanyId] = useState('c1')
   const actingFacultyId = 'f1'
 
+  const [authSession, setAuthSession] = useState<AuthSession | null>(() => ({
+    userId: 's2',
+    name: 'Priya Patel',
+    email: 'priya.patel@college.edu',
+    role: 'student',
+    token: 'tok_demo_s2',
+    signedInAt: today(),
+  }))
+
   const [students, setStudents] = useState(seedStudents)
   const [companies, setCompanies] = useState(seedCompanies)
   const [drives, setDrives] = useState(seedDrives)
@@ -199,7 +215,6 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const [audit, setAudit] = useState(seedAudit)
 
   // Demo persistence: keep the walkthrough intact across refreshes and deep links.
-  // Session-scoped so a fresh tab always starts from clean seed data.
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
@@ -207,6 +222,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       const raw = localStorage.getItem(SNAPSHOT_KEY) || sessionStorage.getItem(SNAPSHOT_KEY)
       if (raw) {
         const s = JSON.parse(raw) as Record<string, unknown>
+        if (s.authSession !== undefined) setAuthSession(s.authSession as AuthSession | null)
         if (s.role) setRole(s.role as Role)
         if (s.actingStudentId) setActingStudentId(s.actingStudentId as string)
         if (s.actingCompanyId) setActingCompanyId(s.actingCompanyId as string)
@@ -239,6 +255,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     if (!hydrated) return
     try {
       const snapshot = JSON.stringify({
+        authSession,
         role,
         actingStudentId,
         actingCompanyId,
@@ -268,6 +285,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
   }, [
     hydrated,
+    authSession,
     role,
     actingStudentId,
     actingCompanyId,
@@ -307,6 +325,156 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const emailToast = useCallback((to: string, subject: string) => {
     toast.success(`Email sent to ${to}`, { description: subject })
   }, [])
+
+  const login: PortalState['login'] = (email, pass) => {
+    const cleanEmail = email.trim().toLowerCase()
+    // 1. Check Admin
+    if (cleanEmail === 'admin@college.edu' || cleanEmail === 'tnp@college.edu') {
+      if (pass !== 'admin123' && pass !== 'password123' && pass !== 'admin') {
+        return { success: false, error: 'Invalid admin password (try "admin123")' }
+      }
+      const sess: AuthSession = {
+        userId: 'admin1',
+        name: 'T&P Cell Admin',
+        email: cleanEmail,
+        role: 'admin',
+        token: `tok_admin_${Date.now()}`,
+        signedInAt: today(),
+      }
+      setAuthSession(sess)
+      setRole('admin')
+      toast.success('Signed in as Admin / T&P Cell')
+      return { success: true }
+    }
+
+    // 2. Check Faculty
+    const fMatch = faculty.find((f) => f.email.toLowerCase() === cleanEmail) || (cleanEmail.includes('faculty') ? faculty[0] : null)
+    if (fMatch) {
+      if (pass !== 'faculty123' && pass !== 'password123' && pass !== 'faculty') {
+        return { success: false, error: 'Invalid faculty password (try "faculty123")' }
+      }
+      const sess: AuthSession = {
+        userId: fMatch.id,
+        name: fMatch.name,
+        email: fMatch.email,
+        role: 'faculty',
+        token: `tok_faculty_${Date.now()}`,
+        signedInAt: today(),
+      }
+      setAuthSession(sess)
+      setRole('faculty')
+      toast.success(`Signed in as ${fMatch.name}`)
+      return { success: true }
+    }
+
+    // 3. Check Student
+    const sMatch = students.find((s) => s.email.toLowerCase() === cleanEmail)
+    if (sMatch) {
+      const expectedPass = sMatch.password || 'password123'
+      if (pass !== expectedPass && pass !== 'password123') {
+        return { success: false, error: 'Invalid student password (default: "password123")' }
+      }
+      const sess: AuthSession = {
+        userId: sMatch.id,
+        name: sMatch.name,
+        email: sMatch.email,
+        role: 'student',
+        token: `tok_student_${sMatch.id}_${Date.now()}`,
+        signedInAt: today(),
+      }
+      setAuthSession(sess)
+      setRole('student')
+      setActingStudentId(sMatch.id)
+      toast.success(`Signed in as ${sMatch.name}`)
+      return { success: true }
+    }
+
+    // 4. Check Company
+    const cMatch = companies.find((c) => (c.email?.toLowerCase() === cleanEmail || c.hrEmail.toLowerCase() === cleanEmail))
+    if (cMatch) {
+      const expectedPass = cMatch.password || 'password123'
+      if (pass !== expectedPass && pass !== 'password123') {
+        return { success: false, error: 'Invalid company password (default: "password123")' }
+      }
+      const sess: AuthSession = {
+        userId: cMatch.id,
+        name: cMatch.name,
+        email: cMatch.hrEmail,
+        role: 'company',
+        token: `tok_company_${cMatch.id}_${Date.now()}`,
+        signedInAt: today(),
+      }
+      setAuthSession(sess)
+      setRole('company')
+      setActingCompanyId(cMatch.id)
+      toast.success(`Signed in as ${cMatch.name}`)
+      return { success: true }
+    }
+
+    return { success: false, error: 'No account registered with this email' }
+  }
+
+  const demoLogin: PortalState['demoLogin'] = (targetRole, personaId) => {
+    if (targetRole === 'admin') {
+      const sess: AuthSession = {
+        userId: 'admin1',
+        name: 'T&P Cell Admin',
+        email: 'tnp@college.edu',
+        role: 'admin',
+        token: `tok_admin_${Date.now()}`,
+        signedInAt: today(),
+      }
+      setAuthSession(sess)
+      setRole('admin')
+      toast.success('Signed in as Admin / T&P Cell')
+    } else if (targetRole === 'faculty') {
+      const f = faculty[0]
+      const sess: AuthSession = {
+        userId: f.id,
+        name: f.name,
+        email: f.email,
+        role: 'faculty',
+        token: `tok_faculty_${Date.now()}`,
+        signedInAt: today(),
+      }
+      setAuthSession(sess)
+      setRole('faculty')
+      toast.success(`Signed in as Faculty (${f.name})`)
+    } else if (targetRole === 'company') {
+      const targetC = companies.find((c) => c.id === (personaId || actingCompanyId)) || companies[0]
+      const sess: AuthSession = {
+        userId: targetC.id,
+        name: targetC.name,
+        email: targetC.hrEmail,
+        role: 'company',
+        token: `tok_company_${targetC.id}_${Date.now()}`,
+        signedInAt: today(),
+      }
+      setAuthSession(sess)
+      setRole('company')
+      setActingCompanyId(targetC.id)
+      toast.success(`Signed in as Recruiter (${targetC.name})`)
+    } else {
+      const targetS = students.find((s) => s.id === (personaId || actingStudentId)) || students[0]
+      const sess: AuthSession = {
+        userId: targetS.id,
+        name: targetS.name,
+        email: targetS.email,
+        role: 'student',
+        token: `tok_student_${targetS.id}_${Date.now()}`,
+        signedInAt: today(),
+      }
+      setAuthSession(sess)
+      setRole('student')
+      setActingStudentId(targetS.id)
+      toast.success(`Signed in as Student (${targetS.name})`)
+    }
+  }
+
+  const logout: PortalState['logout'] = () => {
+    setAuthSession(null)
+    toast.info('Signed out successfully')
+  }
 
   const registerStudent: PortalState['registerStudent'] = (s) => {
     const id = uid('s')
@@ -393,6 +561,20 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const student = students.find((s) => s.id === actingStudentId)
     const drive = drives.find((d) => d.id === driveId)
     if (!student || !drive) return
+
+    // Duplicate check
+    if (applications.some((a) => a.driveId === driveId && a.studentId === actingStudentId)) {
+      toast.error('Already Applied', { description: 'You have already submitted an application for this drive.' })
+      return
+    }
+
+    // Eligibility check
+    const elig = checkEligibility(student, drive)
+    if (elig.state === 'not_eligible') {
+      toast.error('Application Blocked: Not Eligible', { description: elig.reason })
+      return
+    }
+
     const app: Application = {
       id: uid('a'),
       driveId,
@@ -407,6 +589,15 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const setApplicationStatus: PortalState['setApplicationStatus'] = (appId, status, reason) => {
+    const app = applications.find((a) => a.id === appId)
+    const student = students.find((s) => s.id === app?.studentId)
+    const drive = drives.find((d) => d.id === app?.driveId)
+
+    if (status === 'rejected' && (!reason || reason.trim().length === 0)) {
+      toast.error('Rejection Reason Required', { description: 'Please provide a clear reason for the rejection.' })
+      return
+    }
+
     setApplications((prev) =>
       prev.map((a) =>
         a.id === appId
@@ -414,9 +605,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
           : a,
       ),
     )
-    const app = applications.find((a) => a.id === appId)
-    const student = students.find((s) => s.id === app?.studentId)
-    const drive = drives.find((d) => d.id === app?.driveId)
+
     if (student && drive) {
       const label = status.replace(/_/g, ' ')
       notify('student', `Application ${label}`, `${drive.title}: your application is now "${label}".${reason ? ` Reason: ${reason}` : ''}`)
@@ -471,9 +660,17 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       ppoStatus: 'none',
     }
     setInternships((prev) => [...prev, internship])
-    setAttendance((prev) => [...prev, { internshipId: internship.id, workingDays: 0, present: 0, absent: 0, leave: 0 }])
-    // The offer and the student's acceptance are on record the moment tracking starts;
-    // the remaining documents open as empty slots for the T&P cell to chase.
+    setAttendance((prev) => [
+      ...prev,
+      {
+        internshipId: internship.id,
+        workingDays: 0,
+        present: 0,
+        absent: 0,
+        leave: 0,
+        entries: [],
+      },
+    ])
     setDocuments((prev) => [
       ...prev,
       ...openDocumentLedger(internship.id, ['offer_letter', 'acceptance']),
@@ -506,14 +703,41 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const submitAttendanceDay: PortalState['submitAttendanceDay'] = (internshipId, kind) => {
+    const t = today()
     setAttendance((prev) =>
-      prev.map((a) =>
-        a.internshipId === internshipId
-          ? { ...a, workingDays: a.workingDays + 1, [kind]: a[kind] + 1 }
-          : a,
-      ),
+      prev.map((a) => {
+        if (a.internshipId !== internshipId) return a
+        const existingEntries = a.entries ?? []
+        const todayEntryIndex = existingEntries.findIndex((e) => e.date === t)
+
+        if (todayEntryIndex >= 0) {
+          const oldStatus = existingEntries[todayEntryIndex].status
+          if (oldStatus === kind) {
+            toast.info(`Today's attendance is already recorded as ${kind}.`)
+            return a
+          }
+          const updatedEntries = [...existingEntries]
+          updatedEntries[todayEntryIndex] = { date: t, status: kind }
+          toast.success(`Attendance updated to ${kind} for today`)
+          return {
+            ...a,
+            [oldStatus]: Math.max(0, a[oldStatus] - 1),
+            [kind]: a[kind] + 1,
+            lastMarkedDate: t,
+            entries: updatedEntries,
+          }
+        }
+
+        toast.success('Attendance recorded', { description: 'Sent to supervisor for approval.' })
+        return {
+          ...a,
+          workingDays: a.workingDays + 1,
+          [kind]: a[kind] + 1,
+          lastMarkedDate: t,
+          entries: [...existingEntries, { date: t, status: kind }],
+        }
+      }),
     )
-    toast.success('Attendance recorded', { description: 'Sent to supervisor for approval.' })
   }
 
   const setMilestoneStatus: PortalState['setMilestoneStatus'] = (id, status, remark) => {
@@ -625,6 +849,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const submitSelfPlacement: PortalState['submitSelfPlacement'] = (sp) => {
+    if (new Date(sp.endDate) <= new Date(sp.startDate)) {
+      toast.error('Invalid Date Range', { description: 'Internship end date must be after start date.' })
+      return
+    }
     setSelfPlacements((prev) => [...prev, { ...sp, id: uid('sp'), studentId: actingStudentId, status: 'pending' }])
     notify('faculty', 'Self-placement submitted', `A self-placed internship at ${sp.companyName} awaits verification.`)
     toast.success('Self-placement submitted', { description: 'Sent to faculty for verification.' })
@@ -887,6 +1115,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<PortalState>(
     () => ({
+      authSession,
+      login,
+      demoLogin,
+      logout,
       role,
       setRole,
       actingStudentId,
@@ -950,6 +1182,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      authSession,
       role,
       actingStudentId,
       actingCompanyId,

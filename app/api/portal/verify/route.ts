@@ -19,7 +19,8 @@ export async function GET(req: Request) {
   if (doc) {
     const internship = seedInternships.find((n) => n.id === doc.internshipId)
     const student = seedStudents.find((s) => s.id === internship?.studentId)
-    const company = seedCompanies.find((c) => c.id === internship?.companyId)
+    const company = internship?.companyId === 'self' ? null : seedCompanies.find((c) => c.id === internship?.companyId)
+    const companyName = company?.name || (internship?.type === 'self' ? 'Self-Placed Approved Employer' : 'TechNova Systems')
 
     return NextResponse.json({
       valid: true,
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
       studentName: student?.name || 'Verified Student',
       enrollment: student?.enrollment || 'EN21CS001',
       branch: student?.branch || 'Computer Science',
-      companyName: company?.name || 'Partner Company',
+      companyName,
       role: internship?.role || 'Intern',
       institution: 'G H Raisoni College of Engineering & Management, Jalgaon',
       digitalSignature: `SHA256:${Buffer.from(code + '-AUTHENTIC-GHRCEM').toString('base64').slice(0, 24)}`,
@@ -54,8 +55,8 @@ export async function GET(req: Request) {
       studentName: 'Aarav Sharma',
       enrollment: 'EN21CS001',
       branch: 'Computer Science',
-      companyName: 'Acme Systems',
-      role: 'Full Stack Engineer',
+      companyName: 'TechNova Systems',
+      role: 'Full Stack Engineer Intern',
       institution: 'G H Raisoni College of Engineering & Management, Jalgaon',
       digitalSignature: `SHA256:${Buffer.from(code + '-AUTHENTIC-GHRCEM').toString('base64').slice(0, 24)}`,
     })
