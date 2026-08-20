@@ -101,6 +101,13 @@ function openDocumentLedger(internshipId: string, prefilled: DocumentKind[] = []
 export type StudentProfilePatch = Partial<
   Pick<
     Student,
+    | 'name'
+    | 'email'
+    | 'enrollment'
+    | 'branch'
+    | 'cgpa'
+    | 'backlogs'
+    | 'passingYear'
     | 'skills'
     | 'certifications'
     | 'resumeUploaded'

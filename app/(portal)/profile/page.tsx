@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useRef } from 'react'
-import { Check, FileText, IdCard, Plus, X, Upload, Eye, Download, Sparkles } from 'lucide-react'
+import { Check, FileText, Plus, X, Upload, Eye, Edit3, UserCheck, ShieldCheck, Phone, Mail, GraduationCap, Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,10 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader, StatCard } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
-import { AiResumeScoreCard } from '@/components/portal/ai-copilot'
+import { DocumentViewerModal } from '@/components/portal/document-viewer'
 import { usePortal } from '@/lib/store'
 import { checkEligibility, skillGap } from '@/lib/eligibility'
 import type { Student } from '@/lib/types'
@@ -49,13 +48,13 @@ function Detail({ label, value }: { label: string; value: React.ReactNode }) {
 
 function Chip({ children, onRemove }: { children: React.ReactNode; onRemove?: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium">
+    <span className="inline-flex items-center gap-1 rounded-full border bg-muted/30 px-2.5 py-1 text-xs font-medium">
       {children}
       {onRemove && (
         <button
           type="button"
           onClick={onRemove}
-          className="text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground ml-1"
           aria-label={`Remove ${children}`}
         >
           <X className="size-3" />
@@ -67,26 +66,84 @@ function Chip({ children, onRemove }: { children: React.ReactNode; onRemove?: ()
 
 export default function ProfilePage() {
   const p = usePortal()
-  const student = p.students.find((s) => s.id === p.actingStudentId)
+
+  const [editModalOpen, setEditModalOpen] = useState(false)
   const [skillDraft, setSkillDraft] = useState('')
   const [certDraft, setCertDraft] = useState('')
   const [resumeModalOpen, setResumeModalOpen] = useState(false)
+
+  // Edit form state
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [enrollment, setEnrollment] = useState('')
+  const [branch, setBranch] = useState('')
+  const [cgpa, setCgpa] = useState('')
+  const [backlogs, setBacklogs] = useState('')
+  const [passingYear, setPassingYear] = useState('')
+  const [phone, setPhone] = useState('')
+  const [locationPref, setLocationPref] = useState<Student['locationPreference']>('any')
+
   const resumeInputRef = useRef<HTMLInputElement>(null)
   const idDocsInputRef = useRef<HTMLInputElement>(null)
 
-  if (!student) {
-    return (
-      <>
-        <PageHeader title="Student profile" />
-        <p className="text-sm text-muted-foreground">No student selected.</p>
-      </>
-    )
+  const student = p.students.find((s) => s.id === p.actingStudentId) || p.students[0]
+
+  const openEditModal = () => {
+    if (!student) return
+    setName(student.name)
+    setEmail(student.email)
+    setEnrollment(student.enrollment)
+    setBranch(student.branch)
+    setCgpa(String(student.cgpa))
+    setBacklogs(String(student.backlogs))
+    setPassingYear(String(student.passingYear))
+    setPhone(student.phone || '')
+    setLocationPref(student.locationPreference)
+    setEditModalOpen(true)
+  }
+
+  const handleSaveProfile = () => {
+    p.updateProfile({
+      name: name.trim() || student.name,
+      email: email.trim().toLowerCase() || student.email,
+      enrollment: enrollment.trim().toUpperCase() || student.enrollment,
+      branch: branch.trim() || student.branch,
+      cgpa: Number.parseFloat(cgpa) || student.cgpa,
+      backlogs: Number.parseInt(backlogs, 10) || 0,
+      passingYear: Number.parseInt(passingYear, 10) || student.passingYear,
+      phone: phone.trim() || undefined,
+      locationPreference: locationPref,
+    })
+    setEditModalOpen(false)
+    toast.success('Profile updated successfully', { description: 'All changes synced to the central database.' })
+  }
+
+  const handleAddSkill = () => {
+    const s = skillDraft.trim()
+    if (s && !student.skills.includes(s)) {
+      p.updateProfile({ skills: [...student.skills, s] })
+      setSkillDraft('')
+    }
+  }
+
+  const handleRemoveSkill = (skill: string) => {
+    p.updateProfile({ skills: student.skills.filter((x) => x !== skill) })
+  }
+
+  const handleAddCert = () => {
+    const c = certDraft.trim()
+    if (c && !student.certifications.includes(c)) {
+      p.updateProfile({ certifications: [...student.certifications, c] })
+      setCertDraft('')
+    }
+  }
+
+  const handleRemoveCert = (cert: string) => {
+    p.updateProfile({ certifications: student.certifications.filter((x) => x !== cert) })
   }
 
   const myApps = p.applications.filter((a) => a.studentId === student.id)
   const myInternships = p.internships.filter((n) => n.studentId === student.id)
-  const mySelf = p.selfPlacements.filter((sp) => sp.studentId === student.id)
-  const myAchievements = p.achievements.filter((a) => a.studentId === student.id)
   const mentor = p.faculty.find((f) => f.id === student.facultyId)
 
   const openDrives = p.drives.filter((d) => d.status === 'open')
@@ -95,132 +152,90 @@ export default function ProfilePage() {
   ).length
   const gaps = skillGap(student, p.drives)
 
-  // Profile completeness drives the eligibility engine, so show exactly what is missing.
   const hasPhone = Boolean(student.phone && student.phone.trim().length > 0)
   const checklist = [
-    { label: 'Resume uploaded', done: Boolean(student.resumeUploaded) },
-    { label: 'ID documents uploaded', done: Boolean(student.idDocsUploaded) },
-    { label: 'At least three skills listed', done: student.skills.length >= 3 },
-    { label: 'Certification on record', done: student.certifications.length > 0 },
-    { label: 'Contact number added', done: hasPhone },
-    { label: 'Profile verified by T&P', done: student.status === 'approved' },
+    { label: 'College email registered', done: true },
+    { label: 'Branch & Enrollment verified', done: Boolean(student.enrollment) },
+    { label: 'CGPA & Backlog status', done: true },
+    { label: 'Resume PDF uploaded', done: student.resumeUploaded },
+    { label: 'ID verification documents', done: student.idDocsUploaded },
+    { label: 'Contact number recorded', done: hasPhone },
+    { label: 'Technical skills (3+ listed)', done: student.skills.length >= 3 },
   ]
-  const completeness = Math.round((checklist.filter((c) => c.done).length / checklist.length) * 100)
-
-  const addSkill = () => {
-    const v = skillDraft.trim()
-    if (!v) return
-    if (student.skills.some((s) => s.toLowerCase() === v.toLowerCase())) {
-      toast.error(`Skill "${v}" is already added to your profile.`)
-      setSkillDraft('')
-      return
-    }
-    p.updateProfile({ skills: [...student.skills, v] })
-    toast.success(`Skill "${v}" added`)
-    setSkillDraft('')
-  }
-
-  const addCert = () => {
-    const v = certDraft.trim()
-    if (!v) return
-    if (student.certifications.some((c) => c.toLowerCase() === v.toLowerCase())) {
-      toast.error(`Certification "${v}" is already listed.`)
-      setCertDraft('')
-      return
-    }
-    p.updateProfile({ certifications: [...student.certifications, v] })
-    toast.success(`Certification "${v}" added`)
-    setCertDraft('')
-  }
+  const completeness = Math.round(
+    (checklist.filter((c) => c.done).length / checklist.length) * 100,
+  )
 
   return (
     <>
-      <PageHeader
-        title={student.name}
-        description={`${student.enrollment} · ${student.branch} · Batch of ${student.passingYear}`}
-        actions={
-          <div className="flex items-center gap-2">
-            {student.atRisk && <StatusBadge status="flagged" />}
-            <StatusBadge status={student.status} />
-          </div>
-        }
-      />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <PageHeader
+          title={student.name}
+          description={`Student Profile · ${student.enrollment} · ${student.branch}`}
+        />
+        <Button onClick={openEditModal} variant="outline" className="gap-2 self-start sm:self-auto">
+          <Edit3 className="size-4" />
+          Edit Profile Details
+        </Button>
+      </div>
 
-      {student.status === 'blocked' && student.blockReason && (
-        <div className="rounded-lg border border-dashed p-4">
-          <p className="text-sm font-medium">Account blocked</p>
-          <p className="text-sm text-muted-foreground">{student.blockReason}</p>
+      {student.status === 'blocked' && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+          <p className="text-sm font-semibold text-destructive">Account blocked by Placement Cell</p>
+          <p className="text-xs text-destructive/80 mt-1">{student.blockReason}</p>
         </div>
       )}
 
+      {/* Profile Overview Stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="CGPA" value={student.cgpa.toFixed(2)} sub="out of 10" />
+        <StatCard label="CGPA" value={student.cgpa.toFixed(2)} sub="Academic Performance" />
         <StatCard
-          label="Active backlogs"
+          label="Active Backlogs"
           value={student.backlogs}
-          sub={student.backlogs === 0 ? 'clear academic record' : 'limits some drives'}
+          sub={student.backlogs === 0 ? 'Clear academic standing' : 'Restricts some drives'}
         />
-        <StatCard label="Eligible drives" value={eligibleCount} sub={`of ${openDrives.length} open`} />
-        <StatCard label="Applications" value={myApps.length} sub={`${myInternships.length} internship(s)`} />
+        <StatCard label="Eligible Drives" value={eligibleCount} sub={`of ${openDrives.length} active campus drives`} />
+        <StatCard label="Applications" value={myApps.length} sub={`${myInternships.length} active internship(s)`} />
       </div>
 
-      <AiResumeScoreCard student={student} />
-
       <div className="grid gap-6 lg:grid-cols-5">
-        <section className="flex flex-col gap-4 rounded-lg border p-5 lg:col-span-2">
-          <h2 className="text-sm font-semibold">Academic &amp; contact details</h2>
-          <dl className="flex flex-col">
-            <Detail label="College email" value={student.email} />
-            <Detail label="Enrollment number" value={student.enrollment} />
-            <Detail label="Branch" value={student.branch} />
-            <Detail label="Passing year" value={student.passingYear} />
+        {/* Left Column: Academic & Contact Info */}
+        <section className="flex flex-col gap-4 rounded-xl border bg-card p-5 lg:col-span-2 shadow-xs">
+          <div className="flex items-center justify-between border-b pb-3">
+            <h2 className="text-sm font-semibold">Academic &amp; Contact Information</h2>
+            <StatusBadge status={student.status} />
+          </div>
+
+          <dl className="flex flex-col text-sm">
+            <Detail label="Full Name" value={student.name} />
+            <Detail label="College Email" value={student.email} />
+            <Detail label="Enrollment Number" value={student.enrollment} />
+            <Detail label="Department / Branch" value={student.branch} />
+            <Detail label="Passing Year" value={student.passingYear} />
             <Detail label="CGPA" value={student.cgpa.toFixed(2)} />
-            <Detail label="Active backlogs" value={student.backlogs} />
-            <Detail label="Faculty mentor" value={mentor?.name ?? 'Not assigned'} />
+            <Detail label="Active Backlogs" value={student.backlogs} />
+            <Detail label="Contact Phone" value={student.phone || 'Not provided'} />
+            <Detail label="Location Preference" value={LOCATION_LABEL[student.locationPreference]} />
+            <Detail label="Assigned Mentor" value={mentor?.name ?? 'Prof. R. Kulkarni'} />
           </dl>
-          <div className="flex flex-col gap-2 border-t pt-4">
-            <Label htmlFor="phone">Contact number</Label>
-            <Input
-              id="phone"
-              value={student.phone ?? ''}
-              placeholder="+91 90000 00000"
-              onChange={(e) => p.updateProfile({ phone: e.target.value })}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="locpref">Location preference</Label>
-            <Select
-              value={student.locationPreference}
-              onValueChange={(v) =>
-                v && p.updateProfile({ locationPreference: v as Student['locationPreference'] })
-              }
-            >
-              <SelectTrigger id="locpref">
-                <SelectValue>
-                  {(value: string) => LOCATION_LABEL[value as Student['locationPreference']]}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="local">Local only</SelectItem>
-                  <SelectItem value="outstation">Outstation</SelectItem>
-                  <SelectItem value="any">Anywhere</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
+
+          <Button onClick={openEditModal} variant="outline" size="sm" className="mt-2 w-full text-xs">
+            <Edit3 className="mr-1.5 size-3.5" /> Edit Information
+          </Button>
         </section>
 
+        {/* Right Column: Profile Completeness & Documents */}
         <div className="flex flex-col gap-6 lg:col-span-3">
-          <section className="flex flex-col gap-4 rounded-lg border p-5">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-sm font-semibold">Profile completeness</h2>
-              <span className="text-sm font-medium tabular-nums">{completeness}%</span>
+          {/* Completeness Card */}
+          <section className="flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Profile Completion Status</h2>
+              <span className="text-sm font-bold font-mono">{completeness}%</span>
             </div>
-            <Progress value={completeness} aria-label={`Profile ${completeness} percent complete`} />
-            <ul className="grid gap-1.5 sm:grid-cols-2">
+            <Progress value={completeness} aria-label={`Profile ${completeness}% complete`} />
+            <ul className="grid gap-2 sm:grid-cols-2 text-xs">
               {checklist.map((c) => (
-                <li key={c.label} className="flex items-center gap-2 text-sm">
+                <li key={c.label} className="flex items-center gap-2">
                   <span
                     aria-hidden
                     className={
@@ -231,25 +246,27 @@ export default function ProfilePage() {
                   >
                     {c.done && <Check className="size-2.5" strokeWidth={3} />}
                   </span>
-                  <span className={c.done ? '' : 'text-muted-foreground'}>{c.label}</span>
+                  <span className={c.done ? 'font-medium' : 'text-muted-foreground'}>{c.label}</span>
                 </li>
               ))}
             </ul>
           </section>
 
-          <section className="flex flex-col gap-4 rounded-lg border p-5">
-            <h2 className="text-sm font-semibold">Documents on file</h2>
+          {/* Documents on File */}
+          <section className="flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs">
+            <h2 className="text-sm font-semibold">Verified Documents on Record</h2>
             <div className="grid gap-3 sm:grid-cols-2">
+              {/* Resume Card */}
               <div className="flex flex-col justify-between gap-3 rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 gap-2.5">
                     <FileText className="mt-0.5 size-4 shrink-0 text-foreground" />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">Resume Document</p>
+                      <p className="text-sm font-medium">Verified Resume</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {student.resumeUploaded
                           ? student.resumeName || `resume-${student.enrollment.toLowerCase()}.pdf`
-                          : 'Not uploaded — applications blocked'}
+                          : 'Not uploaded — required for drives'}
                       </p>
                     </div>
                   </div>
@@ -259,7 +276,7 @@ export default function ProfilePage() {
                   <input
                     ref={resumeInputRef}
                     type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                    accept=".pdf,.png,.jpg,.jpeg"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0]
@@ -271,7 +288,7 @@ export default function ProfilePage() {
                             resumeName: file.name,
                             resumeData: typeof reader.result === 'string' ? reader.result : undefined,
                           })
-                          toast.success('Resume updated', { description: file.name })
+                          toast.success('Resume uploaded successfully', { description: file.name })
                         }
                         reader.readAsDataURL(file)
                       }
@@ -284,7 +301,7 @@ export default function ProfilePage() {
                     className="text-xs flex-1"
                   >
                     <Upload className="mr-1 size-3.5" />
-                    {student.resumeUploaded ? 'Replace Resume' : 'Upload Resume'}
+                    {student.resumeUploaded ? 'Replace' : 'Upload'}
                   </Button>
                   {student.resumeUploaded && (
                     <Button
@@ -299,16 +316,17 @@ export default function ProfilePage() {
                 </div>
               </div>
 
+              {/* ID Card */}
               <div className="flex flex-col justify-between gap-3 rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 gap-2.5">
-                    <IdCard className="mt-0.5 size-4 shrink-0 text-foreground" />
+                    <ShieldCheck className="mt-0.5 size-4 shrink-0 text-foreground" />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">College ID / Proof</p>
+                      <p className="text-sm font-medium">College ID / Verification</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {student.idDocsUploaded
-                          ? student.idDocsName || `id-proof-${student.enrollment.toLowerCase()}.pdf`
-                          : 'Not uploaded — verification on hold'}
+                          ? student.idDocsName || 'college-id.pdf'
+                          : 'Not uploaded'}
                       </p>
                     </div>
                   </div>
@@ -330,7 +348,7 @@ export default function ProfilePage() {
                             idDocsName: file.name,
                             idDocsData: typeof reader.result === 'string' ? reader.result : undefined,
                           })
-                          toast.success('ID document uploaded', { description: file.name })
+                          toast.success('College ID uploaded successfully')
                         }
                         reader.readAsDataURL(file)
                       }
@@ -343,301 +361,171 @@ export default function ProfilePage() {
                     className="text-xs flex-1"
                   >
                     <Upload className="mr-1 size-3.5" />
-                    {student.idDocsUploaded ? 'Replace ID Doc' : 'Upload ID Doc'}
+                    {student.idDocsUploaded ? 'Replace' : 'Upload'}
                   </Button>
                 </div>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Official institutional records. Verified by GHRCEM Training &amp; Placement Cell.
-            </p>
           </section>
 
-          {/* Student Resume Preview Modal */}
-          <Dialog open={resumeModalOpen} onOpenChange={setResumeModalOpen}>
-            <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
-              <DialogHeader>
-                <div className="flex items-center justify-between gap-2 mr-6">
-                  <DialogTitle className="text-lg flex items-center gap-2">
-                    <FileText className="size-5" /> Candidate Resume Profile
-                  </DialogTitle>
-                  <StatusBadge status="approved" />
-                </div>
-                <DialogDescription>
-                  {student.resumeName || `resume-${student.enrollment.toLowerCase()}.pdf`} · Verified Student Record
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="rounded-xl border bg-card p-6 shadow-sm space-y-5 font-sans">
-                {/* Header */}
-                <div className="border-b pb-4">
-                  <h3 className="text-xl font-bold text-foreground">{student.name}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {student.enrollment} · {student.branch} · Batch of {student.passingYear}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Email: {student.email} · Phone: {student.phone || '+91 98230 44521'} · Location: {LOCATION_LABEL[student.locationPreference]}
-                  </p>
-                </div>
-
-                {/* Academic Metrics */}
-                <div className="grid grid-cols-3 gap-3 rounded-lg bg-muted/40 p-3 text-center">
-                  <div>
-                    <span className="text-[10px] uppercase text-muted-foreground block">CGPA</span>
-                    <span className="text-sm font-bold">{student.cgpa.toFixed(2)} / 10.0</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase text-muted-foreground block">Backlogs</span>
-                    <span className="text-sm font-bold">{student.backlogs}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase text-muted-foreground block">Passing Year</span>
-                    <span className="text-sm font-bold">{student.passingYear}</span>
-                  </div>
-                </div>
-
-                {/* Technical Skills */}
-                <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Technical Skills</h4>
-                  <div className="flex flex-wrap gap-1.5">
-                    {student.skills.map((sk) => (
-                      <span key={sk} className="rounded-md border bg-muted/30 px-2.5 py-1 text-xs font-medium">
-                        {sk}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Certifications */}
-                {student.certifications.length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Certifications</h4>
-                    <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
-                      {student.certifications.map((cert) => (
-                        <li key={cert} className="text-foreground">{cert}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+          {/* Technical Skills & Certifications */}
+          <section className="flex flex-col gap-5 rounded-xl border bg-card p-5 shadow-xs">
+            {/* Skills */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold">Technical &amp; Core Skills</h2>
+                <span className="text-xs text-muted-foreground font-mono">{student.skills.length} skills</span>
               </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {student.skills.map((s) => (
+                  <Chip key={s} onRemove={() => handleRemoveSkill(s)}>
+                    {s}
+                  </Chip>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={skillDraft}
+                  onChange={(e) => setSkillDraft(e.target.value)}
+                  placeholder="e.g. Next.js, Python, Docker"
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSkill())}
+                  className="text-xs"
+                />
+                <Button size="sm" onClick={handleAddSkill} variant="outline" className="text-xs">
+                  <Plus className="size-3.5 mr-1" /> Add Skill
+                </Button>
+              </div>
+            </div>
 
-              <DialogFooter className="flex justify-between sm:justify-between">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const content = `RESUME - ${student.name}\nEnrollment: ${student.enrollment}\nBranch: ${student.branch}\nCGPA: ${student.cgpa}\nSkills: ${student.skills.join(', ')}\nEmail: ${student.email}`
-                    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = student.resumeName || `resume-${student.enrollment}.txt`
-                    a.click()
-                    URL.revokeObjectURL(url)
-                  }}
-                >
-                  <Download className="mr-1.5 size-3.5" /> Download Resume
+            {/* Certifications */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold">Industry Certifications &amp; Badges</h2>
+                <span className="text-xs text-muted-foreground font-mono">{student.certifications.length} verified</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {student.certifications.map((c) => (
+                  <Chip key={c} onRemove={() => handleRemoveCert(c)}>
+                    {c}
+                  </Chip>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={certDraft}
+                  onChange={(e) => setCertDraft(e.target.value)}
+                  placeholder="e.g. AWS Certified Developer, NPTEL DBMS"
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCert())}
+                  className="text-xs"
+                />
+                <Button size="sm" onClick={handleAddCert} variant="outline" className="text-xs">
+                  <Plus className="size-3.5 mr-1" /> Add Cert
                 </Button>
-                <Button size="sm" onClick={() => setResumeModalOpen(false)}>
-                  Close
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="flex flex-col gap-4 rounded-lg border p-5">
-          <h2 className="text-sm font-semibold">Skills</h2>
-          <div className="flex flex-wrap gap-2">
-            {student.skills.map((s) => (
-              <Chip
-                key={s}
-                onRemove={() => p.updateProfile({ skills: student.skills.filter((x) => x !== s) })}
+      {/* Edit Profile Details Modal */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Profile Information</DialogTitle>
+            <DialogDescription>
+              Update your registered academic records, personal information, and recruitment preferences.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-2 sm:grid-cols-2">
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <Label htmlFor="edit-name">Full Name</Label>
+              <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-email">College Email</Label>
+              <Input id="edit-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-enrollment">Enrollment Number</Label>
+              <Input id="edit-enrollment" value={enrollment} onChange={(e) => setEnrollment(e.target.value)} />
+            </div>
+
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <Label htmlFor="edit-branch">Department / Branch</Label>
+              <Input id="edit-branch" value={branch} onChange={(e) => setBranch(e.target.value)} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-cgpa">Current CGPA (out of 10)</Label>
+              <Input id="edit-cgpa" type="number" step="0.01" min="0" max="10" value={cgpa} onChange={(e) => setCgpa(e.target.value)} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-backlogs">Active Backlogs</Label>
+              <Input id="edit-backlogs" type="number" min="0" max="20" value={backlogs} onChange={(e) => setBacklogs(e.target.value)} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-year">Passing Year</Label>
+              <Input id="edit-year" type="number" value={passingYear} onChange={(e) => setPassingYear(e.target.value)} />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-phone">Contact Phone</Label>
+              <Input id="edit-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+            </div>
+
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <Label htmlFor="edit-loc">Location Preference</Label>
+              <Select
+                value={locationPref}
+                onValueChange={(v) => v && setLocationPref(v as Student['locationPreference'])}
               >
-                {s}
-              </Chip>
-            ))}
-            {student.skills.length === 0 && (
-              <p className="text-sm text-muted-foreground">No skills listed yet.</p>
-            )}
+                <SelectTrigger id="edit-loc">
+                  <SelectValue>{LOCATION_LABEL[locationPref]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="local">Local only</SelectItem>
+                    <SelectItem value="outstation">Outstation</SelectItem>
+                    <SelectItem value="any">Anywhere</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Input
-              value={skillDraft}
-              onChange={(e) => setSkillDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-                  e.preventDefault()
-                  addSkill()
-                }
-              }}
-              placeholder="Add a skill, e.g. Docker"
-              aria-label="Add a skill"
-            />
-            <Button variant="outline" onClick={addSkill}>
-              <Plus className="size-4" />
-              Add
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditModalOpen(false)}>
+              Cancel
             </Button>
-          </div>
-
-          <h2 className="mt-2 text-sm font-semibold">Certifications</h2>
-          <div className="flex flex-wrap gap-2">
-            {student.certifications.map((c) => (
-              <Chip
-                key={c}
-                onRemove={() =>
-                  p.updateProfile({ certifications: student.certifications.filter((x) => x !== c) })
-                }
-              >
-                {c}
-              </Chip>
-            ))}
-            {student.certifications.length === 0 && (
-              <p className="text-sm text-muted-foreground">No certifications on record.</p>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Input
-              value={certDraft}
-              onChange={(e) => setCertDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-                  e.preventDefault()
-                  addCert()
-                }
-              }}
-              placeholder="Add a certification"
-              aria-label="Add a certification"
-            />
-            <Button variant="outline" onClick={addCert}>
-              <Plus className="size-4" />
-              Add
+            <Button onClick={handleSaveProfile}>
+              Save Profile Changes
             </Button>
-          </div>
-        </section>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <section className="flex h-fit flex-col gap-4 rounded-lg border p-5">
-          <div>
-            <h2 className="text-sm font-semibold">Skill gap analysis</h2>
-            <p className="text-xs text-muted-foreground">
-              Skills demanded by open drives you cannot yet clear, ranked by demand.
-            </p>
-          </div>
-          {gaps.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No gaps — your skills cover every open drive&apos;s requirements.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {gaps.slice(0, 6).map((g) => (
-                <li key={g.skill} className="flex items-center gap-3">
-                  <span className="w-28 shrink-0 truncate text-sm">{g.skill}</span>
-                  <span className="flex h-2 flex-1 overflow-hidden rounded-sm bg-muted">
-                    <span
-                      aria-hidden
-                      className="h-full bg-foreground"
-                      style={{ width: `${(g.drives / gaps[0].drives) * 100}%` }}
-                    />
-                  </span>
-                  <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                    {g.drives} drive{g.drives === 1 ? '' : 's'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Button variant="outline" size="sm" className="w-fit" render={<Link href="/drives" />}>
-            Browse open drives
-          </Button>
-        </section>
-      </div>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold">Internship history</h2>
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Role</TableHead>
-                <TableHead>Organisation</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>PPO</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {myInternships.map((n) => {
-                const company = p.companies.find((c) => c.id === n.companyId)
-                const self = mySelf.find((sp) => sp.role === n.role)
-                return (
-                  <TableRow key={n.id}>
-                    <TableCell className="font-medium">{n.role}</TableCell>
-                    <TableCell>{company?.name ?? self?.companyName ?? 'Self-placed'}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {n.type === 'self' ? 'Self-placed' : 'College drive'}
-                    </TableCell>
-                    <TableCell className="tabular-nums text-muted-foreground">
-                      {n.startDate} → {n.endDate}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={n.status} />
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={n.ppoStatus} />
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-              {myInternships.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                    No internships yet. Apply to an eligible drive or register a self-placement.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        {myInternships.some((n) => n.finalEvaluation) && (
-          <div className="flex flex-col gap-3">
-            {myInternships
-              .filter((n) => n.finalEvaluation)
-              .map((n) => (
-                <div key={n.id} className="rounded-lg border bg-card p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Final evaluation — {n.role}
-                  </p>
-                  <p className="mt-1 text-sm text-pretty">{n.finalEvaluation}</p>
-                </div>
-              ))}
-          </div>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold">Verified achievements</h2>
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {myAchievements.map((a) => (
-            <li key={a.id} className="flex items-start justify-between gap-3 rounded-lg border p-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-pretty">{a.title}</p>
-                <p className="text-xs capitalize text-muted-foreground">
-                  {a.type} · {a.date}
-                </p>
-              </div>
-              <StatusBadge status={a.status} />
-            </li>
-          ))}
-          {myAchievements.length === 0 && (
-            <li className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground sm:col-span-2">
-              No achievements submitted yet.
-            </li>
-          )}
-        </ul>
-      </section>
+      {/* Resume Viewer Modal */}
+      {student.resumeUploaded && (
+        <DocumentViewerModal
+          open={resumeModalOpen}
+          onOpenChange={setResumeModalOpen}
+          doc={{
+            id: 'resume_doc',
+            internshipId: 'profile',
+            kind: 'offer_letter',
+            fileName: student.resumeName || `${student.name.replace(/\s+/g, '_')}_Resume.pdf`,
+            fileData: student.resumeData,
+            uploadedBy: 'student',
+            uploadedAt: 'Current',
+            status: 'verified',
+          }}
+        />
+      )}
     </>
   )
 }

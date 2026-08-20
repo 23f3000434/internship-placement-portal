@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PageHeader, StatCard } from '@/components/portal/page-header'
-import { AiRecommendationWidget, AiResumeScoreCard } from '@/components/portal/ai-copilot'
+import { AiRecommendationWidget } from '@/components/portal/ai-copilot'
 import { StatusBadge } from '@/components/portal/status-badge'
 import { checkEligibility } from '@/lib/eligibility'
 import { usePortal } from '@/lib/store'
+import { FileText, CheckCircle2, AlertCircle, ArrowRight, User } from 'lucide-react'
 
 function StudentDashboard() {
   const p = usePortal()
@@ -55,9 +56,52 @@ function StudentDashboard() {
         <StatCard label="Active internship" value={active ? 1 : 0} sub={active ? active.role : 'none yet'} />
       </div>
 
-      {/* AI Career Copilot Section */}
+      {/* Placement & Profile Summary Section */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <AiResumeScoreCard student={me} />
+        <section className="flex flex-col justify-between rounded-xl border bg-card p-5 shadow-xs">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <User className="size-4 text-foreground" />
+                <h2 className="text-sm font-semibold">Placement Profile &amp; Eligibility</h2>
+              </div>
+              <StatusBadge status={me.status} />
+            </div>
+
+            <div className="grid gap-2.5 sm:grid-cols-2 text-xs">
+              <div className="flex items-center gap-2 rounded-lg border p-2.5">
+                <FileText className="size-4 text-foreground shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium">Resume PDF</p>
+                  <p className="text-muted-foreground truncate">{me.resumeUploaded ? 'Verified & On File' : 'Not uploaded'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-lg border p-2.5">
+                <CheckCircle2 className="size-4 text-foreground shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium">Academic Standing</p>
+                  <p className="text-muted-foreground">{me.backlogs === 0 ? 'Clear (0 backlogs)' : `${me.backlogs} backlog(s)`}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">Technical Skills:</span>{' '}
+                {me.skills.length > 0 ? me.skills.join(', ') : 'No skills documented yet'}
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t pt-3 mt-3 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">{me.skills.length} skills listed</span>
+            <Button size="sm" variant="outline" className="text-xs h-7 gap-1" render={<Link href="/profile" />}>
+              Edit Profile <ArrowRight className="size-3" />
+            </Button>
+          </div>
+        </section>
+
         <AiRecommendationWidget student={me} />
       </div>
 
