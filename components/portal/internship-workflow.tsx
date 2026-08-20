@@ -87,6 +87,8 @@ function VerifyCodeDialog({ doc }: { doc: InternshipDocument }) {
 function DocumentRow({ doc, internship }: { doc: InternshipDocument; internship: Internship }) {
   const p = usePortal()
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadMode, setUploadMode] = useState<'file' | 'link'>('file')
+  const [fileUrlInput, setFileUrlInput] = useState('')
   const [viewOpen, setViewOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -118,17 +120,28 @@ function DocumentRow({ doc, internship }: { doc: InternshipDocument; internship:
   }
 
   const handleConfirmUpload = () => {
-    const finalName = fileName.trim() || defaultName
+    if (uploadMode === 'file' && !fileDataUrl && !selectedFile) {
+      toast.error('Please select a file to upload')
+      return
+    }
+    if (uploadMode === 'link' && !fileUrlInput.trim()) {
+      toast.error('Please enter a valid Google Drive or document link')
+      return
+    }
+
+    const finalName = fileName.trim() || (uploadMode === 'link' ? `${doc.kind}-gdrive-doc` : defaultName)
     p.uploadDocument(
       internship.id,
       doc.kind,
       finalName,
-      fileDataUrl || undefined,
-      selectedFile?.size,
+      uploadMode === 'file' ? (fileDataUrl || undefined) : undefined,
+      uploadMode === 'file' ? selectedFile?.size : undefined,
+      uploadMode === 'link' ? fileUrlInput.trim() : undefined,
     )
     setUploadOpen(false)
     setSelectedFile(null)
     setFileDataUrl(null)
+    setFileUrlInput('')
   }
 
   return (
@@ -205,33 +218,73 @@ function DocumentRow({ doc, internship }: { doc: InternshipDocument; internship:
           <DialogHeader>
             <DialogTitle>Upload {label}</DialogTitle>
             <DialogDescription>
-              Upload your official signed document (PDF, PNG, JPG). It will be recorded in the centralized portal.
+              Upload your official signed document (PDF, PNG, JPG) or provide a Google Drive shareable link.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-4">
-            {/* File Drop / Select Area */}
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
-            >
-              <Upload className="size-8 text-muted-foreground mb-2" />
-              <p className="text-xs font-semibold text-foreground">
-                {selectedFile ? selectedFile.name : 'Click to select document file'}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {selectedFile
-                  ? `${Math.round(selectedFile.size / 1024)} KB · Ready to upload`
-                  : 'PDF, DOCX, PNG, JPG up to 10 MB'}
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                className="hidden"
-                onChange={handleFileChange}
-              />
+            <div className="flex flex-col gap-2">
+              <Label>Document Source</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={uploadMode === 'file' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setUploadMode('file')}
+                  className="text-xs"
+                >
+                  <Upload className="mr-1.5 size-3.5" /> Upload File
+                </Button>
+                <Button
+                  type="button"
+                  variant={uploadMode === 'link' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setUploadMode('link')}
+                  className="text-xs"
+                >
+                  <QrCode className="mr-1.5 size-3.5" /> Google Drive Link
+                </Button>
+              </div>
             </div>
+
+            {uploadMode === 'file' ? (
+              /* File Drop / Select Area */
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+              >
+                <Upload className="size-8 text-muted-foreground mb-2" />
+                <p className="text-xs font-semibold text-foreground">
+                  {selectedFile ? selectedFile.name : 'Click to select document file'}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {selectedFile
+                    ? `${Math.round(selectedFile.size / 1024)} KB · Ready to upload`
+                    : 'PDF, DOCX, PNG, JPG up to 10 MB'}
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`link-${doc.id}`}>Google Drive / Cloud Shareable URL</Label>
+                <Input
+                  id={`link-${doc.id}`}
+                  value={fileUrlInput}
+                  onChange={(e) => setFileUrlInput(e.target.value)}
+                  placeholder="https://drive.google.com/file/d/... or Dropbox/OneDrive link"
+                  className="text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Ensure the link is set to &quot;Anyone with the link can view&quot;.
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`file-${doc.id}`}>Document record name</Label>

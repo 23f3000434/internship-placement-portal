@@ -183,6 +183,7 @@ interface PortalState {
     fileName: string,
     fileData?: string,
     fileSize?: number,
+    fileUrl?: string,
   ) => void
   setDocumentStatus: (id: string, status: DocumentStatus, reason?: string) => void
   setPpoStatus: (internshipId: string, status: PpoStatus, opts?: { ppoPackage?: number; note?: string }) => void
@@ -1178,11 +1179,13 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     fileName,
     fileData,
     fileSize,
+    fileUrl,
   ) => {
     const existing = documents.find((d) => d.internshipId === internshipId && d.kind === kind)
     const next: Partial<InternshipDocument> = {
       fileName,
       fileData: fileData ?? existing?.fileData,
+      fileUrl: fileUrl ?? existing?.fileUrl,
       fileSize: fileSize ?? existing?.fileSize,
       uploadedBy: role === 'company' ? 'company' : 'student',
       uploadedAt: today(),

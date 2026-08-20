@@ -94,6 +94,9 @@ export default function DocumentsPage() {
     (n) => n.ppoStatus === 'offered' || n.ppoStatus === 'accepted',
   ).length
 
+  const [uploadMode, setUploadMode] = useState<'file' | 'link'>('file')
+  const [fileUrlInput, setFileUrlInput] = useState('')
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -112,29 +115,36 @@ export default function DocumentsPage() {
   }
 
   const handleDirectUploadSubmit = () => {
-    if (!fileDataUrl && !selectedFile) {
+    if (uploadMode === 'file' && !fileDataUrl && !selectedFile) {
       toast.error('Please select a file to upload')
+      return
+    }
+    if (uploadMode === 'link' && !fileUrlInput.trim()) {
+      toast.error('Please enter a valid Google Drive or document link')
       return
     }
 
     const internshipId = internships[0]?.id || `intern_${p.actingStudentId}`
-    const fileName = customDocTitle.trim() || selectedFile?.name || `${selectedKind}-${Date.now()}.pdf`
+    const defaultExtName = uploadMode === 'link' ? `${selectedKind}-gdrive-doc` : `${selectedKind}-${Date.now()}.pdf`
+    const fileName = customDocTitle.trim() || selectedFile?.name || defaultExtName
 
     p.uploadDocument(
       internshipId,
       selectedKind,
       fileName,
-      fileDataUrl || undefined,
-      selectedFile?.size,
+      uploadMode === 'file' ? (fileDataUrl || undefined) : undefined,
+      uploadMode === 'file' ? selectedFile?.size : undefined,
+      uploadMode === 'link' ? fileUrlInput.trim() : undefined,
     )
 
-    toast.success('Document uploaded successfully', {
-      description: `${documentLabel[selectedKind]} recorded in the central verification ledger.`,
+    toast.success('Document recorded successfully', {
+      description: `${documentLabel[selectedKind]} saved and recorded in the verification ledger.`,
     })
 
     setUploadModalOpen(false)
     setSelectedFile(null)
     setFileDataUrl(null)
+    setFileUrlInput('')
     setCustomDocTitle('')
   }
 
@@ -312,29 +322,69 @@ export default function DocumentsPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label>Attach File (PDF, PNG, JPG)</Label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
-              >
-                <Upload className="size-8 text-muted-foreground mb-2" />
-                <p className="text-xs font-semibold text-foreground">
-                  {selectedFile ? selectedFile.name : 'Click to select document file'}
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  {selectedFile
-                    ? `${(selectedFile.size / 1024).toFixed(1)} KB selected`
-                    : 'PDF, PNG, or JPG up to 10MB'}
-                </p>
+              <Label>Document Source</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={uploadMode === 'file' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setUploadMode('file')}
+                  className="text-xs"
+                >
+                  <Upload className="mr-1.5 size-3.5" /> Upload File (PDF/IMG)
+                </Button>
+                <Button
+                  type="button"
+                  variant={uploadMode === 'link' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setUploadMode('link')}
+                  className="text-xs"
+                >
+                  <QrCode className="mr-1.5 size-3.5" /> Google Drive Link
+                </Button>
               </div>
             </div>
+
+            {uploadMode === 'file' ? (
+              <div className="flex flex-col gap-2">
+                <Label>Attach File (PDF, PNG, JPG)</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+                >
+                  <Upload className="size-8 text-muted-foreground mb-2" />
+                  <p className="text-xs font-semibold text-foreground">
+                    {selectedFile ? selectedFile.name : 'Click to select document file'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {selectedFile
+                      ? `${(selectedFile.size / 1024).toFixed(1)} KB selected`
+                      : 'PDF, PNG, or JPG up to 10MB'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="docLink">Google Drive / Cloud Share Link</Label>
+                <Input
+                  id="docLink"
+                  value={fileUrlInput}
+                  onChange={(e) => setFileUrlInput(e.target.value)}
+                  placeholder="https://drive.google.com/file/d/... or Dropbox/OneDrive link"
+                  className="text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Ensure the link sharing permission is set to &quot;Anyone with the link can view&quot;.
+                </p>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2">

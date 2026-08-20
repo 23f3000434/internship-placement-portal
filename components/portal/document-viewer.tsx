@@ -225,8 +225,40 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
             </div>
           </div>
 
+          {/* Google Drive / Cloud Document Embedded Frame */}
+          {doc.fileUrl && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-lg bg-muted/40 p-3 border text-xs">
+                <div className="flex items-center gap-2 truncate">
+                  <ExternalLink className="size-4 text-foreground shrink-0" />
+                  <span className="truncate font-medium text-foreground">{doc.fileUrl}</span>
+                </div>
+                <a
+                  href={doc.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 font-semibold underline text-foreground ml-3 hover:opacity-80"
+                >
+                  Open in New Tab ↗
+                </a>
+              </div>
+              <div className="rounded-lg border overflow-hidden bg-background h-96">
+                <iframe
+                  src={
+                    doc.fileUrl.includes('drive.google.com/file/d/')
+                      ? doc.fileUrl.replace(/\/view(\?.*)?$/, '/preview').replace(/\/edit(\?.*)?$/, '/preview')
+                      : doc.fileUrl
+                  }
+                  title={`Preview of ${label}`}
+                  className="w-full h-full border-0"
+                  allow="autoplay"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Direct Image Rendering */}
-          {doc.fileData && doc.fileData.startsWith('data:image') && (
+          {doc.fileData && doc.fileData.startsWith('data:image') && !doc.fileUrl && (
             <div className="rounded-lg border overflow-hidden bg-muted/40 p-2 text-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -238,7 +270,7 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
           )}
 
           {/* Embedded PDF Viewer */}
-          {doc.fileData && (doc.fileData.startsWith('data:application/pdf') || doc.fileData.startsWith('data:@file/pdf')) && (
+          {doc.fileData && (doc.fileData.startsWith('data:application/pdf') || doc.fileData.startsWith('data:@file/pdf')) && !doc.fileUrl && (
             <div className="rounded-lg border overflow-hidden bg-background">
               <object
                 data={previewUrl || doc.fileData}
@@ -253,7 +285,7 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
             </div>
           )}
 
-          {!doc.fileData && (
+          {!doc.fileData && !doc.fileUrl && (
             <div className="rounded-lg border border-dashed p-4 text-xs text-muted-foreground text-center">
               Verified digital placement record on file. The official signed transcript can be downloaded or verified using the public code below.
             </div>

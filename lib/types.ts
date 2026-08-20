@@ -185,6 +185,7 @@ export interface InternshipDocument {
   kind: DocumentKind
   fileName?: string
   fileData?: string
+  fileUrl?: string
   fileSize?: number
   uploadedBy?: 'student' | 'company'
   uploadedAt?: string
