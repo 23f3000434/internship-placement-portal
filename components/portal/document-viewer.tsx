@@ -30,6 +30,51 @@ import { usePortal } from '@/lib/store'
 import { documentLabel } from '@/lib/eligibility'
 import type { DocumentKind, Internship, InternshipDocument, Student, Company } from '@/lib/types'
 
+export function normalizeExternalUrl(rawUrl?: string): string {
+  if (!rawUrl) return ''
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return ''
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed
+  }
+  return `https://${trimmed}`
+}
+
+export function getEmbeddableDriveUrl(rawUrl?: string): string {
+  const url = normalizeExternalUrl(rawUrl)
+  if (!url) return ''
+
+  // Standard Google Drive file preview
+  if (url.includes('drive.google.com/file/d/')) {
+    return url.replace(/\/view(\?.*)?$/, '/preview').replace(/\/edit(\?.*)?$/, '/preview')
+  }
+
+  // Google Drive open?id= link
+  const openIdMatch = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/)
+  if (openIdMatch?.[1]) {
+    return `https://drive.google.com/file/d/${openIdMatch[1]}/preview`
+  }
+
+  // Google Drive uc?id= link
+  const ucIdMatch = url.match(/drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/)
+  if (ucIdMatch?.[1]) {
+    return `https://drive.google.com/file/d/${ucIdMatch[1]}/preview`
+  }
+
+  // Google Docs / Sheets / Slides preview
+  if (url.includes('docs.google.com/document/d/')) {
+    return url.replace(/\/edit(\?.*)?$/, '/preview')
+  }
+  if (url.includes('docs.google.com/spreadsheets/d/')) {
+    return url.replace(/\/edit(\?.*)?$/, '/preview')
+  }
+  if (url.includes('docs.google.com/presentation/d/')) {
+    return url.replace(/\/edit(\?.*)?$/, '/preview')
+  }
+
+  return url
+}
+
 interface DocumentViewerModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -231,12 +276,12 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
               <div className="flex items-center justify-between rounded-lg bg-muted/40 p-3 border text-xs">
                 <div className="flex items-center gap-2 truncate">
                   <ExternalLink className="size-4 text-foreground shrink-0" />
-                  <span className="truncate font-medium text-foreground">{doc.fileUrl}</span>
+                  <span className="truncate font-medium text-foreground">{normalizeExternalUrl(doc.fileUrl)}</span>
                 </div>
                 <a
-                  href={doc.fileUrl}
+                  href={normalizeExternalUrl(doc.fileUrl)}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="shrink-0 font-semibold underline text-foreground ml-3 hover:opacity-80"
                 >
                   Open in New Tab ↗
@@ -244,11 +289,7 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
               </div>
               <div className="rounded-lg border overflow-hidden bg-background h-96">
                 <iframe
-                  src={
-                    doc.fileUrl.includes('drive.google.com/file/d/')
-                      ? doc.fileUrl.replace(/\/view(\?.*)?$/, '/preview').replace(/\/edit(\?.*)?$/, '/preview')
-                      : doc.fileUrl
-                  }
+                  src={getEmbeddableDriveUrl(doc.fileUrl)}
                   title={`Preview of ${label}`}
                   className="w-full h-full border-0"
                   allow="autoplay"

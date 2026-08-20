@@ -1290,10 +1290,13 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     fileUrl,
   ) => {
     const existing = documents.find((d) => d.internshipId === internshipId && d.kind === kind)
+    const rawUrl = (fileUrl || '').trim()
+    const cleanUrl = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : undefined
+
     const next: Partial<InternshipDocument> = {
       fileName,
       fileData: fileData ?? existing?.fileData,
-      fileUrl: fileUrl ?? existing?.fileUrl,
+      fileUrl: cleanUrl ?? existing?.fileUrl,
       fileSize: fileSize ?? existing?.fileSize,
       uploadedBy: role === 'company' ? 'company' : 'student',
       uploadedAt: today(),
