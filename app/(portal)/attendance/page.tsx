@@ -44,6 +44,9 @@ export default function AttendancePage() {
   const pct = att && att.workingDays > 0 ? Math.round((att.present / att.workingDays) * 100) : 0
   const milestonesDone = milestones.filter((m) => m.status === 'completed').length
 
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayEntry = att?.entries?.find((e) => e.date === todayStr)
+
   return (
     <>
       <PageHeader
@@ -67,7 +70,14 @@ export default function AttendancePage() {
 
       <div className="grid gap-6 lg:grid-cols-5">
         <section className="flex h-fit flex-col gap-4 rounded-lg border p-5 lg:col-span-2">
-          <h2 className="text-sm font-semibold">Mark today&apos;s attendance</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Today&apos;s Attendance</h2>
+            {todayEntry && (
+              <span className="rounded-full border border-foreground bg-foreground px-2 py-0.5 text-[11px] font-medium text-background capitalize">
+                {todayEntry.status}
+              </span>
+            )}
+          </div>
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Attendance percentage</span>
@@ -78,17 +88,29 @@ export default function AttendancePage() {
           {active.status === 'active' ? (
             <>
               <div className="grid grid-cols-3 gap-2">
-                <Button onClick={() => p.submitAttendanceDay(active.id, 'present')}>Present</Button>
-                <Button variant="outline" onClick={() => p.submitAttendanceDay(active.id, 'absent')}>
+                <Button
+                  variant={todayEntry?.status === 'present' ? 'default' : 'outline'}
+                  onClick={() => p.submitAttendanceDay(active.id, 'present')}
+                >
+                  Present
+                </Button>
+                <Button
+                  variant={todayEntry?.status === 'absent' ? 'default' : 'outline'}
+                  onClick={() => p.submitAttendanceDay(active.id, 'absent')}
+                >
                   Absent
                 </Button>
-                <Button variant="outline" onClick={() => p.submitAttendanceDay(active.id, 'leave')}>
+                <Button
+                  variant={todayEntry?.status === 'leave' ? 'default' : 'outline'}
+                  onClick={() => p.submitAttendanceDay(active.id, 'leave')}
+                >
                   Leave
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Each entry is sent to your company supervisor for approval. Attendance below 75%
-                gets flagged to faculty.
+                {todayEntry
+                  ? `Recorded for today (${todayStr}). Click another button if you need to adjust.`
+                  : 'Click to record today\'s attendance. Sent to supervisor for verification.'}
               </p>
             </>
           ) : (

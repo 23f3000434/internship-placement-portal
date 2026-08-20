@@ -49,8 +49,18 @@ export default function NewDrivePage() {
   const [deadline, setDeadline] = useState(daysFromNow(14))
   const [startDate, setStartDate] = useState(daysFromNow(30))
   const [endDate, setEndDate] = useState(daysFromNow(114))
+  const [error, setError] = useState<string | null>(null)
 
-  const canSubmit = title.trim() && description.trim() && me?.status === 'approved'
+  const canSubmit = Boolean(
+    title.trim() &&
+      description.trim() &&
+      field.trim() &&
+      location.trim() &&
+      Number(stipend) >= 0 &&
+      Number(durationWeeks) > 0 &&
+      Number(openings) > 0 &&
+      me?.status === 'approved',
+  )
 
   const csv = (v: string) =>
     v
@@ -60,9 +70,18 @@ export default function NewDrivePage() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!canSubmit) return
+    setError(null)
+    if (!canSubmit) {
+      setError('Complete all required role details with valid positive values.')
+      return
+    }
+    if (!(openDate <= deadline && deadline < startDate && startDate < endDate)) {
+      setError('Dates must follow this order: applications open, deadline, internship start, internship end.')
+      return
+    }
     const jdSkills = csv(skills)
-    p.createDrive({
+    try {
+      p.createDrive({
       title: title.trim(),
       description: description.trim(),
       skills: jdSkills,
@@ -93,8 +112,11 @@ export default function NewDrivePage() {
       deadline,
       startDate,
       endDate,
-    })
-    router.push('/company/drives')
+      })
+      router.push('/company/drives')
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : 'Drive could not be published.')
+    }
   }
 
   return (
@@ -144,11 +166,11 @@ export default function NewDrivePage() {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="field">Field</Label>
-              <Input id="field" value={field} onChange={(e) => setField(e.target.value)} />
+              <Input id="field" value={field} onChange={(e) => setField(e.target.value)} required />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="location">Location</Label>
-              <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
+              <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} required />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="workMode">Work mode</Label>
@@ -350,6 +372,7 @@ export default function NewDrivePage() {
           </div>
         </section>
 
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center gap-3 border-t pt-6">
           <Button type="submit" disabled={!canSubmit}>
             Publish drive

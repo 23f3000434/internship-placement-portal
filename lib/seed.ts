@@ -6,6 +6,7 @@ import type {
   Company,
   CompanyFeedback,
   Drive,
+  Faculty,
   Internship,
   InternshipDocument,
   Interview,
@@ -20,9 +21,31 @@ import type {
 
 export const seedStudents: Student[] = [
   {
+    id: 's_ashu_01',
+    name: 'Ashu Jagtap',
+    email: 'ashu@gmail.com',
+    password: 'password123',
+    enrollment: 'EN21CS099',
+    branch: 'Computer Science',
+    cgpa: 8.9,
+    backlogs: 0,
+    passingYear: 2026,
+    skills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'Python'],
+    certifications: ['AWS Certified Developer', 'Full Stack Engineering'],
+    phone: '+91 98765 43210',
+    locationPreference: 'any',
+    resumeUploaded: true,
+    resumeName: 'Ashu_Jagtap_Software_Engineer_Resume.pdf',
+    idDocsUploaded: true,
+    idDocsName: 'College_ID_Card.pdf',
+    status: 'approved',
+    facultyId: 'f1',
+  },
+  {
     id: 's1',
     name: 'Aarav Sharma',
     email: 'aarav.sharma@college.edu',
+    password: 'password123',
     enrollment: 'EN21CS001',
     branch: 'Computer Science',
     cgpa: 8.7,
@@ -41,6 +64,7 @@ export const seedStudents: Student[] = [
     id: 's2',
     name: 'Priya Patel',
     email: 'priya.patel@college.edu',
+    password: 'password123',
     enrollment: 'EN21CS014',
     branch: 'Computer Science',
     cgpa: 9.1,
@@ -59,6 +83,7 @@ export const seedStudents: Student[] = [
     id: 's3',
     name: 'Rohan Verma',
     email: 'rohan.verma@college.edu',
+    password: 'password123',
     enrollment: 'EN21EC022',
     branch: 'Electronics',
     cgpa: 7.2,
@@ -78,6 +103,7 @@ export const seedStudents: Student[] = [
     id: 's4',
     name: 'Sneha Iyer',
     email: 'sneha.iyer@college.edu',
+    password: 'password123',
     enrollment: 'EN21ME010',
     branch: 'Mechanical',
     cgpa: 8.0,
@@ -96,6 +122,7 @@ export const seedStudents: Student[] = [
     id: 's5',
     name: 'Kabir Singh',
     email: 'kabir.singh@college.edu',
+    password: 'password123',
     enrollment: 'EN22CS031',
     branch: 'Computer Science',
     cgpa: 6.9,
@@ -103,7 +130,7 @@ export const seedStudents: Student[] = [
     passingYear: 2027,
     skills: ['Java', 'Spring'],
     certifications: [],
-    phone: '+91 98220 11031',
+    phone: '',
     locationPreference: 'any',
     resumeUploaded: true,
     idDocsUploaded: false,
@@ -114,6 +141,7 @@ export const seedStudents: Student[] = [
     id: 's6',
     name: 'Ananya Rao',
     email: 'ananya.rao@college.edu',
+    password: 'password123',
     enrollment: 'EN22IT005',
     branch: 'Information Technology',
     cgpa: 8.4,
@@ -132,6 +160,7 @@ export const seedStudents: Student[] = [
     id: 's7',
     name: 'Dev Mehta',
     email: 'dev.mehta@college.edu',
+    password: 'password123',
     enrollment: 'EN21CS044',
     branch: 'Computer Science',
     cgpa: 7.8,
@@ -151,6 +180,7 @@ export const seedStudents: Student[] = [
     id: 's8',
     name: 'Isha Kulkarni',
     email: 'isha.kulkarni@college.edu',
+    password: 'password123',
     enrollment: 'EN21CS050',
     branch: 'Computer Science',
     cgpa: 9.3,
@@ -171,6 +201,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c1',
     name: 'TechNova Systems',
+    email: 'hr@technova.example.com',
+    password: 'password123',
     industry: 'Software',
     website: 'https://technova.example.com',
     hrName: 'Meera Joshi',
@@ -183,6 +215,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c2',
     name: 'DataForge Analytics',
+    email: 'talent@dataforge.example.com',
+    password: 'password123',
     industry: 'Data & AI',
     website: 'https://dataforge.example.com',
     hrName: 'Arjun Nair',
@@ -195,6 +229,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c3',
     name: 'MechWorks Industries',
+    email: 'careers@mechworks.example.com',
+    password: 'password123',
     industry: 'Manufacturing',
     website: 'https://mechworks.example.com',
     hrName: 'Sunita Desai',
@@ -207,6 +243,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c4',
     name: 'CloudPeak Labs',
+    email: 'people@cloudpeak.example.com',
+    password: 'password123',
     industry: 'Cloud Infrastructure',
     website: 'https://cloudpeak.example.com',
     hrName: 'Vikram Shah',
@@ -219,6 +257,8 @@ export const seedCompanies: Company[] = [
   {
     id: 'c5',
     name: 'FinEdge Capital',
+    email: 'hr@finedge.example.com',
+    password: 'password123',
     industry: 'FinTech',
     website: 'https://finedge.example.com',
     hrName: 'Ritu Malhotra',
@@ -406,7 +446,7 @@ export const seedApplications: Application[] = [
   {
     id: 'a1',
     driveId: 'd1',
-    studentId: 's2',
+    studentId: 's8',
     status: 'shortlisted',
     appliedAt: daysFromNow(-12),
     history: [
@@ -445,7 +485,7 @@ export const seedApplications: Application[] = [
   {
     id: 'a4',
     driveId: 'd1',
-    studentId: 's8',
+    studentId: 's1',
     status: 'under_review',
     appliedAt: daysFromNow(-4),
     history: [
@@ -673,9 +713,36 @@ export const seedWeeklyReports: WeeklyReport[] = [
 ]
 
 export const seedAttendance: AttendanceRecord[] = [
-  { internshipId: 'n1', workingDays: 15, present: 14, absent: 1, leave: 0 },
-  { internshipId: 'n2', workingDays: 60, present: 58, absent: 1, leave: 1 },
-  { internshipId: 'n3', workingDays: 60, present: 44, absent: 12, leave: 4 },
+  {
+    internshipId: 'n1',
+    workingDays: 15,
+    present: 14,
+    absent: 1,
+    leave: 0,
+    lastMarkedDate: daysFromNow(-1),
+    entries: [
+      { date: daysFromNow(-1), status: 'present' },
+      { date: daysFromNow(-2), status: 'present' },
+      { date: daysFromNow(-3), status: 'present' },
+      { date: daysFromNow(-4), status: 'absent' },
+    ],
+  },
+  {
+    internshipId: 'n2',
+    workingDays: 60,
+    present: 58,
+    absent: 1,
+    leave: 1,
+    lastMarkedDate: daysFromNow(-120),
+  },
+  {
+    internshipId: 'n3',
+    workingDays: 60,
+    present: 44,
+    absent: 12,
+    leave: 4,
+    lastMarkedDate: daysFromNow(-100),
+  },
 ]
 
 export const seedMilestones: Milestone[] = [
@@ -781,6 +848,7 @@ export const seedThreads: Thread[] = [
     id: 't1',
     subject: 'Resume verification query',
     participants: ['student', 'admin'],
+    participantIds: ['s1', 'admin1'],
     participantNames: 'Aarav Sharma ↔ T&P Cell',
     unreadFor: ['admin'],
   },
@@ -788,6 +856,7 @@ export const seedThreads: Thread[] = [
     id: 't2',
     subject: 'Drive eligibility relaxation request',
     participants: ['company', 'admin'],
+    participantIds: ['c1', 'admin1'],
     participantNames: 'TechNova Systems ↔ T&P Cell',
     unreadFor: ['admin'],
   },
@@ -795,8 +864,17 @@ export const seedThreads: Thread[] = [
     id: 't3',
     subject: 'Weekly report format',
     participants: ['student', 'faculty'],
+    participantIds: ['s1', 'f1'],
     participantNames: 'Aarav Sharma ↔ Prof. R. Kulkarni',
     unreadFor: ['student'],
+  },
+  {
+    id: 't4',
+    subject: 'Self-placement verification query',
+    participants: ['student', 'faculty'],
+    participantIds: ['s2', 'f1'],
+    participantNames: 'Priya Patel ↔ Prof. R. Kulkarni',
+    unreadFor: [],
   },
 ]
 
@@ -805,6 +883,7 @@ export const seedMessages: Message[] = [
     id: 'msg1',
     threadId: 't1',
     fromRole: 'student',
+    fromUserId: 's1',
     fromName: 'Aarav Sharma',
     body: 'Hello, I updated my resume last week. Could you confirm it has been re-verified for the TechNova drive?',
     at: daysFromNow(-2),
@@ -813,6 +892,7 @@ export const seedMessages: Message[] = [
     id: 'msg2',
     threadId: 't2',
     fromRole: 'company',
+    fromUserId: 'c1',
     fromName: 'TechNova Systems',
     body: 'We would like to relax the CGPA cutoff to 7.0 for the Frontend drive. Please advise.',
     at: daysFromNow(-1),
@@ -821,10 +901,20 @@ export const seedMessages: Message[] = [
     id: 'msg3',
     threadId: 't3',
     fromRole: 'faculty',
+    fromUserId: 'f1',
     fromName: 'Prof. R. Kulkarni',
     body: 'Please include evidence uploads for week 3 onward. The format sheet is attached.',
     at: daysFromNow(-1),
     attachmentName: 'report-format.pdf',
+  },
+  {
+    id: 'msg4',
+    threadId: 't4',
+    fromRole: 'student',
+    fromUserId: 's2',
+    fromName: 'Priya Patel',
+    body: 'Good morning Professor, I have uploaded my self-placement offer letter for review.',
+    at: daysFromNow(-1),
   },
 ]
 
@@ -895,7 +985,23 @@ export const seedAudit: AuditEntry[] = [
   },
 ]
 
-export const faculty = [
-  { id: 'f1', name: 'Prof. R. Kulkarni', department: 'Computer Science' },
-  { id: 'f2', name: 'Prof. S. Deshpande', department: 'Mechanical & Electronics' },
+export const faculty: Faculty[] = [
+  {
+    id: 'f1',
+    name: 'Prof. R. Kulkarni',
+    email: 'faculty@college.edu',
+    department: 'Computer Science',
+    designation: 'Associate Professor & Mentor',
+    password: 'faculty123',
+    phone: '+91 98220 55001',
+  },
+  {
+    id: 'f2',
+    name: 'Prof. S. Deshpande',
+    email: 's.deshpande@college.edu',
+    department: 'Mechanical & Electronics',
+    designation: 'Assistant Professor & Mentor',
+    password: 'password123',
+    phone: '+91 98220 55002',
+  },
 ]

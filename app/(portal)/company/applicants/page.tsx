@@ -31,9 +31,11 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
+import { DocumentViewerModal } from '@/components/portal/document-viewer'
 import { isoDate } from '@/lib/eligibility'
 import { usePortal } from '@/lib/store'
 import type { Application, Student } from '@/lib/types'
+import { toast } from 'sonner'
 
 function ProfileDialog({
   student,
@@ -44,53 +46,155 @@ function ProfileDialog({
   open: boolean
   onOpenChange: (o: boolean) => void
 }) {
+  const [showResume, setShowResume] = useState(false)
   if (!student) return null
+
+  const handleDownloadResume = () => {
+    if (student.resumeData && student.resumeData.startsWith('data:')) {
+      const a = document.createElement('a')
+      a.href = student.resumeData
+      a.download = student.resumeName || `resume-${student.enrollment}.pdf`
+      a.click()
+    } else {
+      const content = `RESUME - ${student.name}\nEnrollment: ${student.enrollment}\nBranch: ${student.branch}\nCGPA: ${student.cgpa}\nSkills: ${student.skills.join(', ')}\nEmail: ${student.email}`
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = student.resumeName || `resume-${student.enrollment}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{student.name}</DialogTitle>
-          <DialogDescription>
-            {student.branch} · {student.enrollment}
-          </DialogDescription>
-        </DialogHeader>
-        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-muted-foreground">CGPA</dt>
-            <dd className="font-medium tabular-nums">{student.cgpa.toFixed(1)}</dd>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{student.name}</DialogTitle>
+            <DialogDescription>
+              {student.branch} · {student.enrollment}
+            </DialogDescription>
+          </DialogHeader>
+          <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">CGPA</dt>
+              <dd className="font-medium tabular-nums">{student.cgpa.toFixed(1)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Location preference</dt>
+              <dd className="font-medium capitalize">{student.locationPreference}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Email</dt>
+              <dd className="font-medium">{student.email}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Skills</dt>
+              <dd className="mt-1 flex flex-wrap gap-1.5">
+                {student.skills.map((s) => (
+                  <span key={s} className="rounded-full border px-2.5 py-0.5 text-xs">
+                    {s}
+                  </span>
+                ))}
+              </dd>
+            </div>
+          </dl>
+          <div className="flex items-center justify-between rounded-md border p-3 text-sm">
+            <span className="flex items-center gap-2">
+              <FileText className="size-4" aria-hidden />
+              {student.resumeUploaded ? student.resumeName || 'resume.pdf' : 'No resume uploaded'}
+            </span>
+            {student.resumeUploaded && (
+              <div className="flex gap-1.5">
+                <Button variant="outline" size="sm" type="button" onClick={() => setShowResume(true)}>
+                  Preview
+                </Button>
+                <Button variant="ghost" size="sm" type="button" onClick={handleDownloadResume}>
+                  Download
+                </Button>
+              </div>
+            )}
           </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Location preference</dt>
-            <dd className="font-medium capitalize">{student.locationPreference}</dd>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resume Preview Modal */}
+      {student.resumeData ? (
+        <DocumentViewerModal
+          open={showResume}
+          onOpenChange={setShowResume}
+          doc={{
+            id: `res_${student.id}`,
+            internshipId: 'applicant_res',
+            kind: 'offer_letter',
+            fileName: student.resumeName || `${student.name.replace(/\s+/g, '_')}_Resume.pdf`,
+            fileData: student.resumeData,
+            uploadedBy: 'student',
+            uploadedAt: 'Current',
+            status: 'verified',
+          }}
+        />
+      ) : (
+        <Dialog open={showResume} onOpenChange={setShowResume}>
+          <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Resume: {student.name}</DialogTitle>
+              <DialogDescription>
+                {student.enrollment} · {student.branch} · Verified Candidate Record
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4 text-xs font-sans">
+            <div className="border-b pb-3">
+              <h3 className="text-lg font-bold text-foreground">{student.name}</h3>
+              <p className="text-muted-foreground">
+                {student.email} · Phone: {student.phone || '+91 98230 44521'} · Batch of {student.passingYear}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="font-semibold text-muted-foreground block text-[10px] uppercase">Academic CGPA</span>
+                <span className="font-bold text-foreground">{student.cgpa.toFixed(2)} / 10.0</span>
+              </div>
+              <div>
+                <span className="font-semibold text-muted-foreground block text-[10px] uppercase">Active Backlogs</span>
+                <span className="font-bold text-foreground">{student.backlogs}</span>
+              </div>
+            </div>
+            <div>
+              <span className="font-semibold text-muted-foreground block text-[10px] uppercase mb-1">Technical Skills</span>
+              <div className="flex flex-wrap gap-1">
+                {student.skills.map((sk) => (
+                  <span key={sk} className="rounded border bg-muted/40 px-2 py-0.5 text-xs font-medium">
+                    {sk}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {student.certifications.length > 0 && (
+              <div>
+                <span className="font-semibold text-muted-foreground block text-[10px] uppercase mb-1">Certifications</span>
+                <ul className="list-disc list-inside text-muted-foreground">
+                  {student.certifications.map((c) => (
+                    <li key={c} className="text-foreground">{c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-          <div className="sm:col-span-2">
-            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Email</dt>
-            <dd className="font-medium">{student.email}</dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Skills</dt>
-            <dd className="mt-1 flex flex-wrap gap-1.5">
-              {student.skills.map((s) => (
-                <span key={s} className="rounded-full border px-2.5 py-0.5 text-xs">
-                  {s}
-                </span>
-              ))}
-            </dd>
-          </div>
-        </dl>
-        <div className="flex items-center justify-between rounded-md border p-3 text-sm">
-          <span className="flex items-center gap-2">
-            <FileText className="size-4" aria-hidden />
-            {student.resumeUploaded ? 'resume.pdf' : 'No resume uploaded'}
-          </span>
-          {student.resumeUploaded && (
-            <Button variant="outline" size="sm" type="button">
-              Open resume
+          <DialogFooter className="flex justify-between sm:justify-between">
+            <Button variant="outline" size="sm" onClick={handleDownloadResume}>
+              Download File
             </Button>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            <Button size="sm" onClick={() => setShowResume(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      )}
+    </>
   )
 }
 
@@ -135,7 +239,11 @@ export default function ApplicantsPage() {
 
   const confirmReject = () => {
     if (!rejecting) return
-    p.setApplicationStatus(rejecting.id, 'rejected', rejectReason.trim() || 'Not a fit for this role.')
+    if (!rejectReason.trim()) {
+      toast.error('Rejection Reason Required', { description: 'Please explain why the candidate is not selected.' })
+      return
+    }
+    p.setApplicationStatus(rejecting.id, 'rejected', rejectReason.trim())
     setRejecting(null)
     setRejectReason('')
   }
@@ -324,7 +432,13 @@ export default function ApplicantsPage() {
             <Button variant="outline" onClick={() => setRejecting(null)}>
               Cancel
             </Button>
-            <Button onClick={confirmReject}>Reject applicant</Button>
+            <Button
+              variant="destructive"
+              disabled={!rejectReason.trim()}
+              onClick={confirmReject}
+            >
+              Reject applicant
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

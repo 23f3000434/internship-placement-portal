@@ -34,9 +34,11 @@ export default function AchievementsPage() {
   const [type, setType] = useState<Achievement['type']>('hackathon')
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(isoDate(-14))
-  const [evidence, setEvidence] = useState(false)
+  const [evidenceName, setEvidenceName] = useState<string | null>(null)
 
-  const valid = title.trim().length > 0 && date && evidence
+  const todayStr = isoDate(0)
+  const isDateValid = Boolean(date && date <= todayStr)
+  const valid = title.trim().length > 0 && isDateValid && Boolean(evidenceName)
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,11 +47,18 @@ export default function AchievementsPage() {
       type,
       title: title.trim(),
       date,
-      evidenceName: `${type}-evidence.pdf`,
+      evidenceName: evidenceName || `${type}-certificate.pdf`,
     })
     setTitle('')
     setDate(isoDate(-14))
-    setEvidence(false)
+    setEvidenceName(null)
+  }
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) {
+      setEvidenceName(f.name)
+    }
   }
 
   const verified = mine.filter((a) => a.status === 'verified').length
@@ -93,32 +102,62 @@ export default function AchievementsPage() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ac-date">Date</Label>
-            <Input id="ac-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <Label htmlFor="ac-date">Date achieved</Label>
+            <Input
+              id="ac-date"
+              type="date"
+              max={todayStr}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+            {!isDateValid && (
+              <span className="text-[11px] text-destructive">Achievement date cannot be in the future.</span>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={() => setEvidence((v) => !v)}
-            aria-pressed={evidence}
+          <label
+            htmlFor="evidence-file"
             className={cn(
-              'flex items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
-              evidence ? 'border-foreground' : 'border-dashed hover:bg-muted/50',
+              'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
+              evidenceName ? 'border-foreground bg-muted/20' : 'border-dashed hover:bg-muted/50',
             )}
           >
-            {evidence ? (
-              <FileCheck className="size-4 shrink-0" aria-hidden />
+            <input
+              id="evidence-file"
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg"
+              className="sr-only"
+              onChange={handleFile}
+            />
+            {evidenceName ? (
+              <FileCheck className="size-4 shrink-0 text-foreground" aria-hidden />
             ) : (
               <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             )}
-            <span>
-              <span className={cn('block font-medium', !evidence && 'text-muted-foreground')}>
-                Evidence upload
+            <span className="flex-1 min-w-0">
+              <span className={cn('block font-medium truncate', !evidenceName && 'text-muted-foreground')}>
+                {evidenceName || 'Evidence certificate upload'}
               </span>
               <span className="block text-xs text-muted-foreground">
-                {evidence ? 'Certificate attached (simulated)' : 'Required — click to attach'}
+                {evidenceName ? `${evidenceName} · Ready to submit` : 'Required — click to select PDF / image'}
               </span>
             </span>
-          </button>
+            {evidenceName && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setEvidenceName(null)
+                }}
+              >
+                Remove
+              </Button>
+            )}
+          </label>
           <Button type="submit" disabled={!valid}>
             Submit for verification
           </Button>

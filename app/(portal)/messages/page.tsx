@@ -1,6 +1,6 @@
 'use client'
 
-import { Mail, MailOpen, Paperclip, Plus, Search, Send } from 'lucide-react'
+import { Mail, MailOpen, Paperclip, Plus, Search, Send, User, Building, GraduationCap, Shield } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,10 +43,24 @@ const RECIPIENTS: Record<Role, Role[]> = {
 
 export default function MessagesPage() {
   const p = usePortal()
+  const currentUserId =
+    p.authSession?.userId ||
+    (p.role === 'student'
+      ? p.actingStudentId
+      : p.role === 'company'
+        ? p.actingCompanyId
+        : p.role === 'faculty'
+          ? p.actingFacultyId
+          : 'admin1')
+
   const myThreads = useMemo(
-    () => p.threads.filter((t) => t.participants.includes(p.role)),
-    [p.threads, p.role],
+    () => p.threads.filter((thread) => thread.participantIds?.includes(currentUserId)),
+    [p.threads, currentUserId],
   )
+  const isUnread = (thread: (typeof p.threads)[number]) =>
+    thread.unreadForIds
+      ? thread.unreadForIds.includes(currentUserId)
+      : thread.unreadFor.includes(p.role)
 
   const [tab, setTab] = useState('inbox')
   const [query, setQuery] = useState('')
@@ -56,12 +70,15 @@ export default function MessagesPage() {
   const [composeOpen, setComposeOpen] = useState(false)
   const [subject, setSubject] = useState('')
   const [toRole, setToRole] = useState<Role>(RECIPIENTS[p.role][0])
+  const [targetRecipientId, setTargetRecipientId] = useState<string>('')
   const [body, setBody] = useState('')
+  const [messageError, setMessageError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
 
   const visible = myThreads.filter((t) => {
     const msgs = p.messages.filter((m) => m.threadId === t.id)
-    if (tab === 'unread' && !t.unreadFor.includes(p.role)) return false
-    if (tab === 'sent' && !msgs.some((m) => m.fromRole === p.role)) return false
+    if (tab === 'unread' && !isUnread(t)) return false
+    if (tab === 'sent' && !msgs.some((m) => m.fromRole === p.role || m.fromUserId === currentUserId)) return false
     if (!query.trim()) return true
     const q = query.toLowerCase()
     return (
@@ -75,7 +92,7 @@ export default function MessagesPage() {
   const thread = selected
     ? p.messages.filter((m) => m.threadId === selected.id).sort((a, b) => a.at.localeCompare(b.at))
     : []
-  const unreadCount = myThreads.filter((t) => t.unreadFor.includes(p.role)).length
+  const unreadCount = myThreads.filter(isUnread).length
 
   const open = (id: string) => {
     setSelectedId(id)
@@ -85,12 +102,12 @@ export default function MessagesPage() {
   return (
     <>
       <PageHeader
-        title="Messages"
-        description={`Mail centre for ${ROLE_LABEL[p.role]} — threads with admin, faculty, students, and companies. ${unreadCount} unread.`}
+        title="Messages & Support"
+        description={`Direct messaging center for ${ROLE_LABEL[p.role]} — communication with T&P admin, faculty mentors, students, and companies. ${unreadCount} unread.`}
         actions={
-          <Button onClick={() => setComposeOpen(true)}>
+          <Button onClick={() => setComposeOpen(true)} className="gap-2">
             <Plus className="size-4" aria-hidden />
-            Compose
+            Compose Message
           </Button>
         }
       />
@@ -105,107 +122,103 @@ export default function MessagesPage() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search messages"
-              aria-label="Search messages"
-              className="pl-9"
+              placeholder="Search conversations…"
+              className="pl-9 text-xs"
             />
           </div>
+
           <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="w-full">
-              <TabsTrigger value="inbox" className="flex-1">
-                Inbox
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="inbox" className="text-xs">Inbox</TabsTrigger>
+              <TabsTrigger value="unread" className="text-xs">
+                Unread {unreadCount > 0 && `(${unreadCount})`}
               </TabsTrigger>
-              <TabsTrigger value="unread" className="flex-1">
-                Unread ({unreadCount})
-              </TabsTrigger>
-              <TabsTrigger value="sent" className="flex-1">
-                Sent
-              </TabsTrigger>
+              <TabsTrigger value="sent" className="text-xs">Sent</TabsTrigger>
             </TabsList>
           </Tabs>
 
-          <ul className="flex flex-col gap-2" aria-label="Message threads">
+          <ul className="flex flex-col gap-1.5 overflow-y-auto max-h-[36rem] pr-1">
             {visible.map((t) => {
-              const msgs = p.messages.filter((m) => m.threadId === t.id)
+              const msgs = p.messages.filter((m) => m.threadId === t.id).sort((a, b) => a.at.localeCompare(b.at))
               const last = msgs[msgs.length - 1]
-              const unread = t.unreadFor.includes(p.role)
-              const active = selected?.id === t.id
+              const threadIsUnread = isUnread(t)
+              const isSelected = t.id === selected?.id
               return (
                 <li key={t.id}>
                   <button
                     type="button"
                     onClick={() => open(t.id)}
-                    aria-current={active}
                     className={cn(
                       'flex w-full flex-col gap-1 rounded-lg border p-3 text-left transition-colors',
-                      active ? 'border-foreground bg-muted' : 'bg-card hover:bg-muted',
+                      isSelected ? 'border-foreground bg-muted/60' : 'hover:bg-muted/30',
                     )}
                   >
-                    <span className="flex items-center gap-2">
-                      {unread ? (
-                        <Mail className="size-4 shrink-0" aria-hidden />
-                      ) : (
-                        <MailOpen className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={cn('truncate text-xs font-semibold', threadIsUnread && 'text-foreground font-bold')}>
+                        {t.participantNames}
+                      </span>
+                      {last && (
+                        <span className="shrink-0 text-[10px] text-muted-foreground">{last.at}</span>
                       )}
-                      <span className={cn('flex-1 truncate text-sm', unread && 'font-semibold')}>
-                        {t.subject}
-                      </span>
-                      {unread && <span className="size-2 shrink-0 rounded-full bg-foreground" />}
-                    </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {t.participantNames}
-                    </span>
+                    </div>
+                    <p className={cn('truncate text-xs', threadIsUnread ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                      {t.subject}
+                    </p>
                     {last && (
-                      <span className="line-clamp-1 text-xs text-muted-foreground">
-                        {last.fromName}: {last.body}
-                      </span>
+                      <p className="line-clamp-1 text-[11px] text-muted-foreground opacity-80">
+                        {last.body}
+                      </p>
                     )}
                   </button>
                 </li>
               )
             })}
             {visible.length === 0 && (
-              <li className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                No threads match this view.
+              <li className="rounded-lg border border-dashed p-8 text-center text-xs text-muted-foreground">
+                No messages found.
               </li>
             )}
           </ul>
         </div>
 
         {selected ? (
-          <section className="flex min-h-[28rem] flex-col rounded-lg border bg-card">
+          <section className="flex min-h-[32rem] flex-col rounded-xl border bg-card shadow-xs">
             <header className="flex flex-col gap-1 border-b p-5">
-              <h2 className="text-lg font-semibold tracking-tight text-balance">{selected.subject}</h2>
-              <p className="text-sm text-muted-foreground">
-                {selected.participantNames} ·{' '}
-                {selected.participants.map((r) => ROLE_LABEL[r]).join(' & ')}
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold">{selected.subject}</h2>
+                <span className="text-xs text-muted-foreground font-mono">{thread.length} messages</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Participants: {selected.participantNames}
               </p>
             </header>
-            <ul className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
+
+            <ul className="flex flex-1 flex-col gap-4 overflow-y-auto p-5 max-h-[26rem]">
               {thread.map((m) => {
-                const mine = m.fromRole === p.role
+                const mine = m.fromRole === p.role || m.fromUserId === currentUserId
                 return (
                   <li
                     key={m.id}
-                    className={cn('flex max-w-[85%] flex-col gap-1', mine && 'self-end items-end')}
+                    className={cn('flex flex-col gap-1 max-w-[85%]', mine ? 'ml-auto items-end' : 'mr-auto items-start')}
                   >
-                    <span className="text-xs text-muted-foreground">
-                      {m.fromName} · {m.at}
-                      {m.system && ' · system'}
-                    </span>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <span className="font-semibold text-foreground">{m.fromName}</span>
+                      <span>·</span>
+                      <span>{ROLE_LABEL[m.fromRole]}</span>
+                      <span>·</span>
+                      <span>{m.at}</span>
+                    </div>
                     <div
                       className={cn(
-                        'rounded-lg border px-3 py-2 text-sm',
+                        'rounded-xl px-4 py-2.5 text-xs',
                         mine
-                          ? 'bg-foreground text-background border-foreground'
-                          : m.system
-                            ? 'border-dashed bg-background'
-                            : 'bg-background',
+                          ? 'bg-foreground text-background font-medium'
+                          : 'bg-muted text-foreground',
                       )}
                     >
-                      <p className="text-pretty">{m.body}</p>
+                      <p className="text-pretty whitespace-pre-wrap">{m.body}</p>
                       {m.attachmentName && (
-                        <span className="mt-2 inline-flex items-center gap-1 text-xs opacity-80">
+                        <span className="mt-2 inline-flex items-center gap-1 text-[11px] opacity-80 border-t border-current/20 pt-1.5 w-full">
                           <Paperclip className="size-3" aria-hidden />
                           {m.attachmentName}
                         </span>
@@ -215,14 +228,23 @@ export default function MessagesPage() {
                 )
               })}
             </ul>
+
             <form
-              className="flex flex-col gap-3 border-t p-5"
-              onSubmit={(e) => {
+              className="flex flex-col gap-3 border-t p-4"
+              onSubmit={async (e) => {
                 e.preventDefault()
-                if (!reply.trim()) return
-                p.sendMessage(selected.id, reply.trim(), attach.trim() || undefined)
-                setReply('')
-                setAttach('')
+                if (!reply.trim() || sending) return
+                setSending(true)
+                setMessageError(null)
+                try {
+                  await p.sendMessage(selected.id, reply.trim(), attach.trim() || undefined)
+                  setReply('')
+                  setAttach('')
+                } catch (sendError) {
+                  setMessageError(sendError instanceof Error ? sendError.message : 'Message could not be delivered.')
+                } finally {
+                  setSending(false)
+                }
               }}
             >
               <Label htmlFor="reply" className="sr-only">
@@ -234,41 +256,58 @@ export default function MessagesPage() {
                 onChange={(e) => setReply(e.target.value)}
                 rows={3}
                 placeholder="Write a reply…"
+                className="text-xs"
               />
+              {messageError && <p role="alert" className="text-xs text-destructive">{messageError}</p>}
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   value={attach}
                   onChange={(e) => setAttach(e.target.value)}
-                  placeholder="Attachment name (optional)"
+                  placeholder="Attachment filename (optional)"
                   aria-label="Attachment name"
-                  className="h-9 max-w-56"
+                  className="h-8 max-w-56 text-xs"
                 />
-                <Button type="submit" size="sm" className="ml-auto">
-                  <Send className="size-4" aria-hidden />
-                  Send reply
+                <Button type="submit" size="sm" className="ml-auto gap-1.5 text-xs" disabled={sending || !reply.trim()}>
+                  <Send className="size-3.5" aria-hidden />
+                  {sending ? 'Sending…' : 'Send reply'}
                 </Button>
               </div>
             </form>
           </section>
         ) : (
-          <div className="flex min-h-[28rem] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-            Select a thread to read it.
+          <div className="flex min-h-[32rem] flex-col items-center justify-center rounded-xl border border-dashed text-center p-8">
+            <Mail className="size-10 text-muted-foreground mb-2" />
+            <p className="text-sm font-semibold">No Conversation Selected</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+              Select a conversation from the left or compose a new message to start chatting.
+            </p>
+            <Button onClick={() => setComposeOpen(true)} size="sm" className="mt-4 gap-1.5 text-xs">
+              <Plus className="size-3.5" /> Compose New Message
+            </Button>
           </div>
         )}
       </div>
 
+      {/* Compose Dialog */}
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Compose message</DialogTitle>
             <DialogDescription>
-              An email notification is delivered to the recipient when you send.
+              Direct real-time message delivered to the selected recipient.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 py-1">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="to">To</Label>
-              <Select value={toRole} onValueChange={(v) => setToRole(v as Role)}>
+              <Label htmlFor="to">Recipient Role</Label>
+              <Select
+                value={toRole}
+                onValueChange={(v) => {
+                  const r = v as Role
+                  setToRole(r)
+                  setTargetRecipientId('')
+                }}
+              >
                 <SelectTrigger id="to">
                   <SelectValue />
                 </SelectTrigger>
@@ -281,17 +320,79 @@ export default function MessagesPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {toRole === 'admin' && (
+              <div className="rounded-lg bg-muted/40 p-3 border text-xs text-muted-foreground">
+                <p className="font-semibold text-foreground">Recipient: Central Training &amp; Placement Cell (T&P Admin)</p>
+                <p className="mt-0.5">Your inquiry will be logged directly in the placement office dashboard.</p>
+              </div>
+            )}
+
+            {toRole === 'faculty' && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="to-faculty">Select Faculty Mentor</Label>
+                <Select value={targetRecipientId} onValueChange={(value) => setTargetRecipientId(value ?? '')}>
+                  <SelectTrigger id="to-faculty">
+                    <SelectValue placeholder="Choose faculty mentor..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {p.faculty.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name} ({f.department})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {toRole === 'company' && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="to-company">Select Company Partner</Label>
+                <Select value={targetRecipientId} onValueChange={(value) => setTargetRecipientId(value ?? '')}>
+                  <SelectTrigger id="to-company">
+                    <SelectValue placeholder="Choose company..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {p.companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.industry})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {toRole === 'student' && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="to-student">Select Student Candidate</Label>
+                <Select value={targetRecipientId} onValueChange={(value) => setTargetRecipientId(value ?? '')}>
+                  <SelectTrigger id="to-student">
+                    <SelectValue placeholder="Choose student..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {p.students.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name} ({s.enrollment} · {s.branch})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="flex flex-col gap-2">
               <Label htmlFor="subject">Subject</Label>
               <Input
                 id="subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="e.g. Query about drive eligibility"
+                placeholder="e.g. Query regarding campus drive or document verification"
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="body">Message</Label>
+              <Label htmlFor="body">Message Body</Label>
               <Textarea
                 id="body"
                 value={body}
@@ -301,20 +402,33 @@ export default function MessagesPage() {
               />
             </div>
           </div>
-          <DialogFooter>
+          {messageError && <p role="alert" className="text-xs text-destructive">{messageError}</p>}
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setComposeOpen(false)}>
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                if (!subject.trim() || !body.trim()) return
-                p.createThread(subject.trim(), toRole, body.trim())
-                setComposeOpen(false)
-                setSubject('')
-                setBody('')
+              disabled={sending || !subject.trim() || !body.trim() || (toRole !== 'admin' && !targetRecipientId)}
+              onClick={async () => {
+                if (sending) return
+                const resolvedTargetId = targetRecipientId || (toRole === 'admin' ? 'admin1' : undefined)
+                setSending(true)
+                setMessageError(null)
+                try {
+                  const newThreadId = await p.createThread(subject.trim(), toRole, body.trim(), resolvedTargetId)
+                  setSelectedId(newThreadId)
+                  setComposeOpen(false)
+                  setSubject('')
+                  setBody('')
+                  setTargetRecipientId('')
+                } catch (sendError) {
+                  setMessageError(sendError instanceof Error ? sendError.message : 'Message could not be delivered.')
+                } finally {
+                  setSending(false)
+                }
               }}
             >
-              Send message
+              {sending ? 'Sending…' : 'Send message'}
             </Button>
           </DialogFooter>
         </DialogContent>

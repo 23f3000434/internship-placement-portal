@@ -24,29 +24,67 @@ function UploadToggle({
   checked: boolean
   onChange: (v: boolean) => void
 }) {
+  const [fileName, setFileName] = useState<string | null>(null)
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) {
+      setFileName(f.name)
+      onChange(true)
+    }
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
+    <label
+      htmlFor={id}
       className={cn(
-        'flex items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
-        checked ? 'border-foreground' : 'border-dashed hover:bg-muted/50',
+        'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
+        checked ? 'border-foreground bg-muted/20' : 'border-dashed hover:bg-muted/50',
       )}
-      aria-pressed={checked}
-      id={id}
     >
+      <input
+        id={id}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+        className="sr-only"
+        onChange={handleFile}
+      />
       {checked ? (
-        <FileCheck className="size-4 shrink-0" aria-hidden />
+        <FileCheck className="size-4 shrink-0 text-foreground" aria-hidden />
       ) : (
         <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       )}
-      <span className="flex-1">
-        <span className={cn('block font-medium', !checked && 'text-muted-foreground')}>{label}</span>
+      <span className="flex-1 min-w-0">
+        <span className={cn('block font-medium truncate', !checked && 'text-muted-foreground')}>
+          {fileName || label}
+        </span>
         <span className="block text-xs text-muted-foreground">
-          {checked ? 'Uploaded (simulated)' : required ? 'Required — click to upload' : 'Optional — click to upload'}
+          {checked
+            ? fileName
+              ? `${fileName} · Attached`
+              : 'Document verified & attached'
+            : required
+              ? 'Required — click to select file'
+              : 'Optional — click to select file'}
         </span>
       </span>
-    </button>
+      {checked && (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setFileName(null)
+            onChange(false)
+          }}
+        >
+          Remove
+        </Button>
+      )}
+    </label>
   )
 }
 
@@ -66,6 +104,7 @@ export default function SelfPlacementPage() {
   const [certificate, setCertificate] = useState(false)
   const [noc, setNoc] = useState(false)
   const [confirm, setConfirm] = useState(false)
+  const dateRangeValid = !startDate || !endDate || new Date(endDate) > new Date(startDate)
 
   const valid =
     companyName.trim() &&
@@ -73,13 +112,14 @@ export default function SelfPlacementPage() {
     location.trim() &&
     startDate &&
     endDate &&
+    dateRangeValid &&
     offerLetter &&
     joiningLetter &&
     confirm
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!valid) return
+    if (!valid || !dateRangeValid) return
     p.submitSelfPlacement({
       companyName: companyName.trim(),
       role: role.trim(),
@@ -109,11 +149,14 @@ export default function SelfPlacementPage() {
     <>
       <PageHeader
         title="Self-placed internship"
-        description="Found an internship on your own? Register it here — faculty verifies your documents before tracking begins."
+        description="Register an off-campus internship found independently. Faculty verifies the offer and joining letters before credits are approved."
       />
       <div className="grid gap-6 lg:grid-cols-5">
-        <form onSubmit={submit} className="flex flex-col gap-5 rounded-lg border p-5 lg:col-span-3">
-          <h2 className="text-sm font-semibold">New self-placement submission</h2>
+        <form onSubmit={submit} className="flex flex-col gap-6 rounded-lg border bg-card p-5 lg:col-span-3">
+          <div>
+            <h2 className="text-sm font-semibold">Internship details</h2>
+            <p className="text-xs text-muted-foreground">All fields except stipend are mandatory.</p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5 sm:col-span-2">
               <Label htmlFor="sp-company">Company name</Label>
@@ -160,10 +203,16 @@ export default function SelfPlacementPage() {
               <Input
                 id="sp-end"
                 type="date"
+                min={startDate || undefined}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 required
               />
+              {!dateRangeValid && (
+                <span className="text-[11px] text-destructive font-medium">
+                  End date must be after start date.
+                </span>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="sp-stipend">Stipend (₹/month)</Label>

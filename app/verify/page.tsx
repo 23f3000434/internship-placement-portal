@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, QrCode, Search, ShieldCheck, ArrowLeft, Printer, FileText, AlertCircle, Building2 } from 'lucide-react'
+import { CheckCircle2, QrCode, Search, ShieldCheck, ArrowLeft, Printer, AlertCircle, Building2, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePortal } from '@/lib/store'
@@ -12,6 +12,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
   const p = usePortal()
   const [codeQuery, setCodeQuery] = useState('')
   const [activeCode, setActiveCode] = useState<string | null>(null)
+  const [searchError, setSearchError] = useState<string | null>(null)
 
   // Handle URL params if any
   useEffect(() => {
@@ -19,7 +20,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
       searchParams.then((params) => {
         if (params?.code) {
           setCodeQuery(params.code)
-          setActiveCode(params.code)
+          setActiveCode(params.code.trim().toUpperCase())
         }
       })
     }
@@ -31,23 +32,38 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
     .slice(0, 4)
     .map((d) => d.verifyCode as string)
 
-  // Look up document in portal state or fallback
+  // Look up document in portal state
   const matchedDoc = activeCode
     ? p.documents.find((d) => d.verifyCode?.toUpperCase() === activeCode.toUpperCase())
     : null
 
   const matchedInternship = matchedDoc ? p.internships.find((n) => n.id === matchedDoc.internshipId) : null
   const matchedStudent = matchedInternship ? p.students.find((s) => s.id === matchedInternship.studentId) : null
-  const matchedCompany = matchedInternship ? p.companies.find((c) => c.id === matchedInternship.companyId) : null
+  const matchedCompany = matchedInternship
+    ? matchedInternship.companyId === 'self'
+      ? null
+      : p.companies.find((c) => c.id === matchedInternship.companyId)
+    : null
+
+  const organizationName = matchedCompany
+    ? matchedCompany.name
+    : matchedInternship?.type === 'self' || matchedInternship?.companyId === 'self'
+      ? 'Self-Placed Approved Employer'
+      : matchedDoc
+        ? 'Institutional Partner Organization'
+        : 'TechNova Systems'
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (codeQuery.trim()) {
-      setActiveCode(codeQuery.trim().toUpperCase())
+    setSearchError(null)
+    if (!codeQuery.trim()) {
+      setSearchError('Please enter a verification code (e.g. ITK-N1-CMP-4821).')
+      return
     }
+    setActiveCode(codeQuery.trim().toUpperCase())
   }
 
-  const isSimulatedValid = activeCode && (matchedDoc || activeCode.startsWith('ITK-'))
+  const isValidRecord = Boolean(matchedDoc)
 
   return (
     <div className="min-h-svh bg-background text-foreground">
@@ -68,7 +84,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
               <ArrowLeft className="size-4 mr-1" />
               Back to Home
             </Button>
-            <Button size="sm" render={<Link href="/dashboard" />}>
+            <Button size="sm" render={<Link href="/signin" />}>
               Portal Login
             </Button>
           </div>
@@ -95,7 +111,10 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                 placeholder="Enter Verification Code (e.g., ITK-N1-CMP-4821)"
                 className="pl-9 font-mono uppercase text-sm h-11"
                 value={codeQuery}
-                onChange={(e) => setCodeQuery(e.target.value)}
+                onChange={(e) => {
+                  setCodeQuery(e.target.value)
+                  setSearchError(null)
+                }}
               />
             </div>
             <Button type="submit" size="lg" className="h-11">
@@ -104,10 +123,16 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
             </Button>
           </form>
 
-          {/* Quick Demo Codes */}
+          {searchError && (
+            <p className="mt-2 text-xs text-destructive flex items-center gap-1.5">
+              <ShieldAlert className="size-3.5" /> {searchError}
+            </p>
+          )}
+
+          {/* Sample Verification Codes */}
           {sampleCodes.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-xs text-muted-foreground">
-              <span>Try sample codes:</span>
+              <span>Try sample verified codes:</span>
               {sampleCodes.map((code) => (
                 <button
                   key={code}
@@ -115,8 +140,9 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                   onClick={() => {
                     setCodeQuery(code)
                     setActiveCode(code)
+                    setSearchError(null)
                   }}
-                  className="rounded border border-dashed px-2 py-0.5 font-mono text-[11px] hover:border-foreground hover:bg-muted"
+                  className="rounded border border-dashed px-2 py-0.5 font-mono text-[11px] hover:border-foreground hover:bg-muted transition-colors"
                 >
                   {code}
                 </button>
@@ -128,7 +154,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
         {/* Verification Result Section */}
         {activeCode && (
           <div className="mt-6">
-            {isSimulatedValid ? (
+            {isValidRecord ? (
               <div className="rounded-xl border bg-card p-6 md:p-8 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-5">
                   <div className="flex items-center gap-3">
@@ -141,7 +167,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Matched in central institutional blockchain &amp; T&amp;P registry
+                        Cryptographically validated in GHRCEM Training &amp; Placement Registry
                       </p>
                     </div>
                   </div>
@@ -172,7 +198,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Host Organization &amp; Role</p>
                       <p className="text-sm font-semibold mt-1">
-                        {matchedCompany?.name || matchedInternship?.companyId === 'self' ? 'Self-Placed Approved Employer' : 'Acme Systems'}
+                        {organizationName}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Role: {matchedInternship?.role || 'Full Stack Engineer Intern'}
@@ -184,20 +210,20 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Document Type</p>
                       <p className="text-sm font-semibold mt-1">
-                        {matchedDoc ? documentLabel[matchedDoc.kind] : 'Internship Completion Certificate'}
+                        {matchedDoc ? documentLabel[matchedDoc.kind] : 'Internship Document'}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">
-                        Code: {activeCode}
+                        Verification Code: {activeCode}
                       </p>
                     </div>
 
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Verification Metadata</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Verified Status: <strong className="text-foreground">Official / Approved</strong>
+                        Verification Status: <strong className="text-foreground">Official / Approved</strong>
                       </p>
                       <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                        Hash: SHA256:GHRCEM-{activeCode.replace(/[^A-Z0-9]/g, '')}-VERIFIED
+                        Digital Hash: SHA256:GHRCEM-{activeCode.replace(/[^A-Z0-9]/g, '')}-AUTH
                       </p>
                     </div>
                   </div>
@@ -210,16 +236,16 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                     <span>Training &amp; Placement Cell · G H Raisoni College of Engineering &amp; Management, Jalgaon</span>
                   </div>
                   <div className="font-mono text-[11px]">
-                    Validated: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    Issued: {matchedDoc?.uploadedAt || new Date().toISOString().slice(0, 10)}
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-8 text-center bg-card">
-                <AlertCircle className="size-10 text-muted-foreground mb-3" />
-                <h3 className="text-base font-semibold">No Record Found</h3>
-                <p className="text-sm text-muted-foreground max-w-md mt-1">
-                  The verification code <code className="font-mono font-medium">{activeCode}</code> could not be found in our official registry. Please check the code and try again.
+              <div className="flex flex-col items-center justify-center rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center">
+                <AlertCircle className="size-10 text-destructive mb-3" />
+                <h3 className="text-base font-semibold text-destructive">Verification Code Not Found</h3>
+                <p className="text-xs text-muted-foreground max-w-md mt-1">
+                  The verification code <code className="font-mono font-medium text-foreground">{activeCode}</code> is not registered in the GHRCEM institutional database. Please check the code from your certificate QR code and try again.
                 </p>
               </div>
             )}

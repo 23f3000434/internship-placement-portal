@@ -10,10 +10,20 @@ export type ApplicationStatus =
   | 'selected'
   | 'rejected'
 
+export interface AuthSession {
+  userId: string
+  name: string
+  email: string
+  role: Role
+  token: string
+  signedInAt: string
+}
+
 export interface Student {
   id: string
   name: string
   email: string
+  password?: string
   enrollment: string
   branch: string
   cgpa: number
@@ -23,7 +33,11 @@ export interface Student {
   certifications: string[]
   locationPreference: 'local' | 'outstation' | 'any'
   resumeUploaded: boolean
+  resumeName?: string
+  resumeData?: string
   idDocsUploaded: boolean
+  idDocsName?: string
+  idDocsData?: string
   status: VerificationStatus
   blockReason?: string
   facultyId: string
@@ -31,9 +45,21 @@ export interface Student {
   phone?: string
 }
 
+export interface Faculty {
+  id: string
+  name: string
+  email: string
+  password?: string
+  department: string
+  designation?: string
+  phone?: string
+}
+
 export interface Company {
   id: string
   name: string
+  email?: string
+  password?: string
   industry: string
   website: string
   hrName: string
@@ -41,6 +67,8 @@ export interface Company {
   location: string
   about: string
   certificateUploaded: boolean
+  certificateName?: string
+  certificateData?: string
   status: VerificationStatus
   blockReason?: string
   addedByStudentId?: string
@@ -106,12 +134,19 @@ export interface WeeklyReport {
   status: 'submitted' | 'company_approved' | 'faculty_reviewed' | 'flagged'
 }
 
+export interface AttendanceDayEntry {
+  date: string
+  status: 'present' | 'absent' | 'leave'
+}
+
 export interface AttendanceRecord {
   internshipId: string
   workingDays: number
   present: number
   absent: number
   leave: number
+  lastMarkedDate?: string
+  entries?: AttendanceDayEntry[]
 }
 
 export interface Milestone {
@@ -149,6 +184,8 @@ export interface InternshipDocument {
   internshipId: string
   kind: DocumentKind
   fileName?: string
+  fileData?: string
+  fileSize?: number
   uploadedBy?: 'student' | 'company'
   uploadedAt?: string
   status: DocumentStatus
@@ -214,6 +251,7 @@ export interface Message {
   threadId: string
   fromRole: Role
   fromName: string
+  fromUserId?: string
   body: string
   at: string
   system?: boolean
@@ -224,8 +262,10 @@ export interface Thread {
   id: string
   subject: string
   participants: Role[]
+  participantIds?: string[]
   participantNames: string
   unreadFor: Role[]
+  unreadForIds?: string[]
 }
 
 export interface Notification {
