@@ -231,24 +231,24 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false)
 
   const applyRemoteState = useCallback((s: Record<string, unknown>) => {
-    if (s.students) setStudents(s.students as Student[])
-    if (s.companies) setCompanies(s.companies as Company[])
-    if (s.faculty) setFacultyList(s.faculty as Faculty[])
-    if (s.drives) setDrives(s.drives as Drive[])
-    if (s.applications) setApplications(s.applications as Application[])
-    if (s.interviews) setInterviews(s.interviews as Interview[])
-    if (s.internships) setInternships(s.internships as Internship[])
-    if (s.documents) setDocuments(s.documents as InternshipDocument[])
-    if (s.weeklyReports) setWeeklyReports(s.weeklyReports as WeeklyReport[])
-    if (s.attendance) setAttendance(s.attendance as AttendanceRecord[])
-    if (s.milestones) setMilestones(s.milestones as Milestone[])
-    if (s.feedback) setFeedback(s.feedback as CompanyFeedback[])
-    if (s.selfPlacements) setSelfPlacements(s.selfPlacements as SelfPlacement[])
-    if (s.achievements) setAchievements(s.achievements as Achievement[])
-    if (s.threads) setThreads(s.threads as Thread[])
-    if (s.messages) setMessages(s.messages as Message[])
-    if (s.notifications) setNotifications(s.notifications as Notification[])
-    if (s.audit) setAudit(s.audit as AuditEntry[])
+    if (Array.isArray(s.students) && s.students.length > 0) setStudents(s.students as Student[])
+    if (Array.isArray(s.companies) && s.companies.length > 0) setCompanies(s.companies as Company[])
+    if (Array.isArray(s.faculty) && s.faculty.length > 0) setFacultyList(s.faculty as Faculty[])
+    if (Array.isArray(s.drives) && s.drives.length > 0) setDrives(s.drives as Drive[])
+    if (Array.isArray(s.applications)) setApplications(s.applications as Application[])
+    if (Array.isArray(s.interviews)) setInterviews(s.interviews as Interview[])
+    if (Array.isArray(s.internships)) setInternships(s.internships as Internship[])
+    if (Array.isArray(s.documents)) setDocuments(s.documents as InternshipDocument[])
+    if (Array.isArray(s.weeklyReports)) setWeeklyReports(s.weeklyReports as WeeklyReport[])
+    if (Array.isArray(s.attendance)) setAttendance(s.attendance as AttendanceRecord[])
+    if (Array.isArray(s.milestones)) setMilestones(s.milestones as Milestone[])
+    if (Array.isArray(s.feedback)) setFeedback(s.feedback as CompanyFeedback[])
+    if (Array.isArray(s.selfPlacements)) setSelfPlacements(s.selfPlacements as SelfPlacement[])
+    if (Array.isArray(s.achievements)) setAchievements(s.achievements as Achievement[])
+    if (Array.isArray(s.threads)) setThreads(s.threads as Thread[])
+    if (Array.isArray(s.messages)) setMessages(s.messages as Message[])
+    if (Array.isArray(s.notifications)) setNotifications(s.notifications as Notification[])
+    if (Array.isArray(s.audit)) setAudit(s.audit as AuditEntry[])
     if (typeof s.uid === 'number') uidCounter = Math.max(uidCounter, s.uid)
   }, [])
 
@@ -405,9 +405,11 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   const login: PortalState['login'] = (email, pass) => {
     const cleanEmail = email.trim().toLowerCase()
+    const cleanPass = pass.trim()
+
     // 1. Check Admin
     if (cleanEmail === 'admin@college.edu' || cleanEmail === 'tnp@college.edu') {
-      if (pass !== 'admin123' && pass !== 'password123' && pass !== 'admin') {
+      if (cleanPass !== 'admin123' && cleanPass !== 'password123' && cleanPass !== 'admin') {
         return { success: false, error: 'Invalid email or password. Please try again.' }
       }
       const sess: AuthSession = {
@@ -427,8 +429,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     // 2. Check Faculty
     const fMatch = facultyList.find((f) => f.email.toLowerCase() === cleanEmail)
     if (fMatch) {
-      const expectedPass = fMatch.password || 'faculty123'
-      if (pass !== expectedPass && pass !== 'faculty123' && pass !== 'password123') {
+      const expectedPass = (fMatch.password || 'faculty123').trim()
+      if (cleanPass !== expectedPass && cleanPass !== 'faculty123' && cleanPass !== 'password123') {
         return { success: false, error: 'Invalid email or password. Please try again.' }
       }
       const sess: AuthSession = {
@@ -447,10 +449,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 3. Check Student
-    const sMatch = students.find((s) => s.email.toLowerCase() === cleanEmail)
+    const sMatch = students.find((s) => s.email.trim().toLowerCase() === cleanEmail)
     if (sMatch) {
-      const expectedPass = sMatch.password || 'password123'
-      if (pass !== expectedPass && pass !== 'password123') {
+      const expectedPass = (sMatch.password || 'password123').trim()
+      if (cleanPass !== expectedPass && cleanPass !== 'password123') {
         return { success: false, error: 'Invalid email or password. Please try again.' }
       }
       const sess: AuthSession = {
@@ -469,10 +471,12 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 4. Check Company
-    const cMatch = companies.find((c) => (c.email?.toLowerCase() === cleanEmail || c.hrEmail.toLowerCase() === cleanEmail))
+    const cMatch = companies.find(
+      (c) => c.email?.trim().toLowerCase() === cleanEmail || c.hrEmail.trim().toLowerCase() === cleanEmail,
+    )
     if (cMatch) {
-      const expectedPass = cMatch.password || 'password123'
-      if (pass !== expectedPass && pass !== 'password123') {
+      const expectedPass = (cMatch.password || 'password123').trim()
+      if (cleanPass !== expectedPass && cleanPass !== 'password123') {
         return { success: false, error: 'Invalid email or password. Please try again.' }
       }
       const sess: AuthSession = {
@@ -557,16 +561,98 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   const registerStudent: PortalState['registerStudent'] = (s) => {
     const id = uid('s')
-    setStudents((prev) => [...prev, { ...s, id, status: 'pending', facultyId: 'f1' }])
-    notify('admin', 'New student registration', `${s.name} submitted documents for verification.`)
-    emailToast(s.email, 'Registration received — pending verification')
+    const cleanStudent: Student = {
+      ...s,
+      id,
+      name: s.name.trim(),
+      email: s.email.trim().toLowerCase(),
+      password: (s.password || 'password123').trim(),
+      status: 'pending',
+      facultyId: 'f1',
+    }
+    const nextStudents = [...students.filter((st) => st.email.toLowerCase() !== cleanStudent.email), cleanStudent]
+    setStudents(nextStudents)
+
+    // Save immediately to Supabase Cloud
+    supabase
+      .from('portal_data')
+      .upsert({
+        id: 'main_v1',
+        state: {
+          students: nextStudents,
+          companies,
+          faculty: facultyList,
+          drives,
+          applications,
+          interviews,
+          internships,
+          documents,
+          weeklyReports,
+          attendance,
+          milestones,
+          feedback,
+          selfPlacements,
+          achievements,
+          threads,
+          messages,
+          notifications,
+          audit,
+          uid: uidCounter,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .then(() => {})
+
+    notify('admin', 'New student registration', `${cleanStudent.name} submitted documents for verification.`)
+    emailToast(cleanStudent.email, 'Registration received — pending verification')
   }
 
   const registerCompany: PortalState['registerCompany'] = (c) => {
     const id = uid('c')
-    setCompanies((prev) => [...prev, { ...c, id, status: 'pending' }])
-    notify('admin', 'New company registration', `${c.name} submitted registration for verification.`)
-    emailToast(c.hrEmail, 'Registration received — pending admin approval')
+    const cleanCompany: Company = {
+      ...c,
+      id,
+      name: c.name.trim(),
+      email: c.email ? c.email.trim().toLowerCase() : c.hrEmail.trim().toLowerCase(),
+      hrEmail: c.hrEmail.trim().toLowerCase(),
+      password: (c.password || 'password123').trim(),
+      status: 'pending',
+    }
+    const nextCompanies = [...companies.filter((co) => co.hrEmail.toLowerCase() !== cleanCompany.hrEmail), cleanCompany]
+    setCompanies(nextCompanies)
+
+    // Save immediately to Supabase Cloud
+    supabase
+      .from('portal_data')
+      .upsert({
+        id: 'main_v1',
+        state: {
+          students,
+          companies: nextCompanies,
+          faculty: facultyList,
+          drives,
+          applications,
+          interviews,
+          internships,
+          documents,
+          weeklyReports,
+          attendance,
+          milestones,
+          feedback,
+          selfPlacements,
+          achievements,
+          threads,
+          messages,
+          notifications,
+          audit,
+          uid: uidCounter,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .then(() => {})
+
+    notify('admin', 'New company registration', `${cleanCompany.name} submitted registration for verification.`)
+    emailToast(cleanCompany.hrEmail, 'Registration received — pending admin approval')
   }
 
   const addFaculty: PortalState['addFaculty'] = (newFaculty) => {
