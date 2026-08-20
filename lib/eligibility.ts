@@ -211,4 +211,6 @@ export const documentLabel: Record<string, string> = {
   acceptance: 'Acceptance Letter',
   completion_certificate: 'Completion Certificate',
   ppo_letter: 'PPO Letter',
+  resume: 'Verified Resume / CV',
+  identity_document: 'College ID / Identity Document',
 }

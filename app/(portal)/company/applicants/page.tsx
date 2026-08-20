@@ -128,7 +128,7 @@ function ProfileDialog({
           doc={{
             id: `res_${student.id}`,
             internshipId: 'applicant_res',
-            kind: 'offer_letter',
+            kind: 'resume',
             fileName: student.resumeName || `${student.name.replace(/\s+/g, '_')}_Resume.pdf`,
             fileData: student.resumeData,
             uploadedBy: 'student',

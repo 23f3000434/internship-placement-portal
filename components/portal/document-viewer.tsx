@@ -262,11 +262,29 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
             </div>
             <div className="space-y-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                Host / Verification Organization
+                {doc.kind === 'resume'
+                  ? 'Candidate Resume Record'
+                  : doc.kind === 'identity_document'
+                    ? 'Institutional Verification Record'
+                    : 'Host / Verification Organization'}
               </span>
-              <p className="font-semibold text-foreground text-sm">{c?.name || 'TechNova Systems'}</p>
-              <p className="text-muted-foreground">Role: {roleName}</p>
-              <p className="text-muted-foreground">Period: {tenureStr}</p>
+              <p className="font-semibold text-foreground text-sm">
+                {doc.kind === 'resume' || doc.kind === 'identity_document'
+                  ? 'G H Raisoni College of Engineering & Management, Jalgaon'
+                  : c?.name || 'Partner Organization'}
+              </p>
+              <p className="text-muted-foreground">
+                {doc.kind === 'resume'
+                  ? `CGPA: ${s?.cgpa ? s.cgpa.toFixed(2) : '8.50'} · Batch: ${s?.passingYear || '2026'}`
+                  : doc.kind === 'identity_document'
+                    ? `Institutional ID: ${s?.enrollment || 'Verified'}`
+                    : `Role: ${roleName}`}
+              </p>
+              <p className="text-muted-foreground">
+                {doc.kind === 'resume' || doc.kind === 'identity_document'
+                  ? 'Status: Verified Student Record'
+                  : `Period: ${tenureStr}`}
+              </p>
             </div>
           </div>
 

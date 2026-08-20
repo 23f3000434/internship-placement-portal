@@ -30,6 +30,7 @@ import { usePortal } from '@/lib/store'
 import { checkEligibility, skillGap } from '@/lib/eligibility'
 import type { Student } from '@/lib/types'
 import { toast } from 'sonner'
+import { validateUploadedFile } from '@/lib/file-validation'
 
 const LOCATION_LABEL: Record<Student['locationPreference'], string> = {
   local: 'Local only',
@@ -71,6 +72,7 @@ export default function ProfilePage() {
   const [skillDraft, setSkillDraft] = useState('')
   const [certDraft, setCertDraft] = useState('')
   const [resumeModalOpen, setResumeModalOpen] = useState(false)
+  const [idDocModalOpen, setIdDocModalOpen] = useState(false)
 
   // Edit form state
   const [name, setName] = useState('')
@@ -278,9 +280,15 @@ export default function ProfilePage() {
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg"
                     className="hidden"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0]
                       if (file) {
+                        const check = await validateUploadedFile(file, ['pdf'], 2 * 1024 * 1024)
+                        if (!check.valid) {
+                          toast.error('Resume Upload Blocked', { description: check.error || 'Must be a valid PDF file.' })
+                          e.target.value = ''
+                          return
+                        }
                         const reader = new FileReader()
                         reader.onload = () => {
                           p.updateProfile({
@@ -338,9 +346,15 @@ export default function ProfilePage() {
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg"
                     className="hidden"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0]
                       if (file) {
+                        const check = await validateUploadedFile(file, ['pdf', 'image'], 2 * 1024 * 1024)
+                        if (!check.valid) {
+                          toast.error('Identity Document Blocked', { description: check.error || 'Must be a valid PDF or Image.' })
+                          e.target.value = ''
+                          return
+                        }
                         const reader = new FileReader()
                         reader.onload = () => {
                           p.updateProfile({
@@ -363,6 +377,16 @@ export default function ProfilePage() {
                     <Upload className="mr-1 size-3.5" />
                     {student.idDocsUploaded ? 'Replace' : 'Upload'}
                   </Button>
+                  {student.idDocsUploaded && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setIdDocModalOpen(true)}
+                      className="text-xs"
+                    >
+                      <Eye className="mr-1 size-3.5" /> View
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -515,11 +539,30 @@ export default function ProfilePage() {
           open={resumeModalOpen}
           onOpenChange={setResumeModalOpen}
           doc={{
-            id: 'resume_doc',
+            id: `resume_${student.id}`,
             internshipId: 'profile',
-            kind: 'offer_letter',
+            kind: 'resume',
             fileName: student.resumeName || `${student.name.replace(/\s+/g, '_')}_Resume.pdf`,
             fileData: student.resumeData,
+            uploadedBy: 'student',
+            uploadedAt: 'Current',
+            status: 'verified',
+          }}
+          student={student}
+        />
+      )}
+
+      {/* ID Document Viewer Modal */}
+      {student.idDocsUploaded && (
+        <DocumentViewerModal
+          open={idDocModalOpen}
+          onOpenChange={setIdDocModalOpen}
+          doc={{
+            id: `id_doc_${student.id}`,
+            internshipId: 'profile',
+            kind: 'identity_document',
+            fileName: student.idDocsName || `${student.name.replace(/\s+/g, '_')}_College_ID.pdf`,
+            fileData: student.idDocsData,
             uploadedBy: 'student',
             uploadedAt: 'Current',
             status: 'verified',

@@ -139,7 +139,7 @@ export default function VerificationsPage() {
                         setViewDoc({
                           id: `res_${s.id}`,
                           internshipId: 'student_reg',
-                          kind: 'offer_letter',
+                          kind: 'resume',
                           fileName: s.resumeName || `${s.name.replace(/\s+/g, '_')}_Resume.pdf`,
                           fileData: s.resumeData,
                           uploadedBy: 'student',
@@ -164,7 +164,7 @@ export default function VerificationsPage() {
                         setViewDoc({
                           id: `id_${s.id}`,
                           internshipId: 'student_reg',
-                          kind: 'joining_letter',
+                          kind: 'identity_document',
                           fileName: s.idDocsName || `${s.name.replace(/\s+/g, '_')}_ID_Card.pdf`,
                           fileData: s.idDocsData,
                           uploadedBy: 'student',

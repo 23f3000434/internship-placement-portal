@@ -176,6 +176,8 @@ export type DocumentKind =
   | 'acceptance'
   | 'completion_certificate'
   | 'ppo_letter'
+  | 'resume'
+  | 'identity_document'
 
 export type DocumentStatus = 'not_uploaded' | 'uploaded' | 'verified' | 'rejected'
 
