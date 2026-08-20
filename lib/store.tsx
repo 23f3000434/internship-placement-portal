@@ -1380,15 +1380,17 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const submitSelfPlacement: PortalState['submitSelfPlacement'] = (sp) => {
+    const currentStudentId = authSession?.userId || actingStudentId || 's1'
     if (new Date(sp.endDate) <= new Date(sp.startDate)) {
       toast.error('Invalid Date Range', { description: 'Internship end date must be after start date.' })
       return
     }
-    const updated = [...selfPlacements, { ...sp, id: uid('sp'), studentId: actingStudentId, status: 'pending' as const }]
+    const newRecord = { ...sp, id: uid('sp'), studentId: currentStudentId, status: 'pending' as const }
+    const updated = [...selfPlacements, newRecord]
     setSelfPlacements(updated)
     syncToCloud({ selfPlacements: updated })
     notify('faculty', 'Self-placement submitted', `A self-placed internship at ${sp.companyName} awaits verification.`)
-    toast.success('Self-placement submitted', { description: 'Sent to faculty for verification.' })
+    toast.success('Self-placement submitted', { description: 'Sent to faculty mentor for review and approval.' })
   }
 
   const reviewSelfPlacement: PortalState['reviewSelfPlacement'] = (id, approve, reason) => {

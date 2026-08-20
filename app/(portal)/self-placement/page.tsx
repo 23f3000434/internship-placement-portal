@@ -31,7 +31,7 @@ function UploadToggle({
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
-      const check = await validateUploadedFile(f, ['pdf', 'image'])
+      const check = await validateUploadedFile(f, ['pdf', 'image', 'doc'])
       if (!check.valid) {
         toast.error('File Upload Blocked', { description: check.error || 'Invalid file format or signature.' })
         e.target.value = ''
@@ -41,49 +41,47 @@ function UploadToggle({
       }
       setFileName(f.name)
       onChange(true)
+      toast.success(`${label} Attached`, { description: f.name })
     }
   }
 
   return (
-    <label
-      htmlFor={id}
+    <div
       className={cn(
-        'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
-        checked ? 'border-foreground bg-muted/20' : 'border-dashed hover:bg-muted/50',
+        'flex items-center justify-between gap-3 rounded-lg border p-3 text-left text-sm transition-colors',
+        checked ? 'border-primary bg-primary/5' : 'border-dashed hover:bg-muted/40',
       )}
     >
-      <input
-        id={id}
-        type="file"
-        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-        className="sr-only"
-        onChange={handleFile}
-      />
-      {checked ? (
-        <FileCheck className="size-4 shrink-0 text-foreground" aria-hidden />
-      ) : (
-        <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-      )}
-      <span className="flex-1 min-w-0">
-        <span className={cn('block font-medium truncate', !checked && 'text-muted-foreground')}>
-          {fileName || label}
-        </span>
-        <span className="block text-xs text-muted-foreground">
-          {checked
-            ? fileName
-              ? `${fileName} · Attached`
-              : 'Document verified & attached'
-            : required
-              ? 'Required — click to select file'
-              : 'Optional — click to select file'}
-        </span>
-      </span>
+      <label htmlFor={id} className="flex-1 flex items-center gap-3 cursor-pointer min-w-0">
+        <input
+          id={id}
+          type="file"
+          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+          className="sr-only"
+          onChange={handleFile}
+        />
+        {checked ? (
+          <FileCheck className="size-4 shrink-0 text-primary" aria-hidden />
+        ) : (
+          <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        )}
+        <div className="min-w-0 flex-1">
+          <span className={cn('block font-medium truncate text-xs sm:text-sm', !checked && 'text-muted-foreground')}>
+            {fileName || label}
+          </span>
+          <span className="block text-[11px] text-muted-foreground">
+            {checked
+              ? fileName ? `${fileName} · Attached` : 'Document verified & attached'
+              : required ? 'Required — click to browse file' : 'Optional — click to browse file'}
+          </span>
+        </div>
+      </label>
       {checked && (
         <Button
           type="button"
           size="sm"
           variant="ghost"
-          className="h-7 px-2 text-xs"
+          className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()
@@ -94,7 +92,7 @@ function UploadToggle({
           Remove
         </Button>
       )}
-    </label>
+    </div>
   )
 }
 
@@ -117,20 +115,55 @@ export default function SelfPlacementPage() {
   const [confirm, setConfirm] = useState(false)
   const dateRangeValid = !startDate || !endDate || new Date(endDate) > new Date(startDate)
 
-  const valid =
-    companyName.trim() &&
-    role.trim() &&
-    location.trim() &&
-    startDate &&
-    endDate &&
-    dateRangeValid &&
-    offerLetter &&
-    joiningLetter &&
-    confirm
-
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!valid || !dateRangeValid) return
+
+    if (me?.status !== 'approved') {
+      toast.error('Account Approval Pending', {
+        description: 'Your student account is awaiting T&P admin verification. Registration will be enabled once approved.',
+      })
+      return
+    }
+
+    if (!companyName.trim()) {
+      toast.error('Company Name Required', { description: 'Please enter the hiring organization name.' })
+      return
+    }
+
+    if (!role.trim()) {
+      toast.error('Role Required', { description: 'Please enter your internship role or title.' })
+      return
+    }
+
+    if (!location.trim()) {
+      toast.error('Location Required', { description: 'Please enter the internship work location or Remote.' })
+      return
+    }
+
+    if (!startDate || !endDate) {
+      toast.error('Timeline Required', { description: 'Please select both start date and end date.' })
+      return
+    }
+
+    if (new Date(endDate) <= new Date(startDate)) {
+      toast.error('Invalid Date Range', { description: 'Internship end date must be strictly after the start date.' })
+      return
+    }
+
+    if (!offerLetter && !joiningLetter) {
+      toast.error('Verification Document Required', {
+        description: 'Please upload at least your Offer Letter or Joining Letter PDF.',
+      })
+      return
+    }
+
+    if (!confirm) {
+      toast.error('Declaration Required', {
+        description: 'Please check the confirmation box before submitting.',
+      })
+      return
+    }
+
     p.submitSelfPlacement({
       companyName: companyName.trim(),
       role: role.trim(),
@@ -143,6 +176,7 @@ export default function SelfPlacementPage() {
       certificateUploaded: certificate,
       nocUploaded: noc,
     })
+
     setCompanyName('')
     setRole('')
     setLocation('')
@@ -241,12 +275,12 @@ export default function SelfPlacementPage() {
             <legend className="mb-1 text-sm font-medium">Documents</legend>
             <div className="grid gap-2 sm:grid-cols-2">
               <UploadToggle id="sp-offer" label="Offer letter" required checked={offerLetter} onChange={setOfferLetter} />
-              <UploadToggle id="sp-joining" label="Joining letter" required checked={joiningLetter} onChange={setJoiningLetter} />
+              <UploadToggle id="sp-joining" label="Joining letter" checked={joiningLetter} onChange={setJoiningLetter} />
               <UploadToggle id="sp-cert" label="Internship certificate" checked={certificate} onChange={setCertificate} />
               <UploadToggle id="sp-noc" label="NOC from college" checked={noc} onChange={setNoc} />
             </div>
             <p className="text-xs text-muted-foreground">
-              The certificate can be uploaded later, after the internship completes. NOC is optional.
+              Offer letter or joining letter is required. The certificate can be uploaded after completion.
             </p>
           </fieldset>
           <div className="flex items-start gap-2">
@@ -261,12 +295,12 @@ export default function SelfPlacementPage() {
             </Label>
           </div>
           <div>
-            <Button type="submit" disabled={!valid || me?.status !== 'approved'}>
+            <Button type="submit" className="w-full sm:w-auto">
               Submit for faculty verification
             </Button>
             {me?.status !== 'approved' && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Your account must be verified before submitting a self-placement.
+              <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                Note: Candidate account is currently pending T&amp;P admin approval.
               </p>
             )}
           </div>
