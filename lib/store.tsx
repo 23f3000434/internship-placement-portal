@@ -117,7 +117,7 @@ export type StudentProfilePatch = Partial<
 interface PortalState {
   hydrated: boolean
   authSession: AuthSession | null
-  login: (email: string, pass: string, targetRole?: Role) => { success: boolean; error?: string }
+  login: (email: string, pass: string, targetRole?: Role) => Promise<{ success: boolean; error?: string }>
   quickLogin: (role: Role, personaId?: string) => void
   logout: () => void
 
@@ -149,8 +149,8 @@ interface PortalState {
   faculty: Faculty[]
 
   // actions
-  registerStudent: (s: Omit<Student, 'id' | 'status' | 'facultyId'>) => void
-  registerCompany: (c: Omit<Company, 'id' | 'status'>) => void
+  registerStudent: (s: Omit<Student, 'id' | 'status' | 'facultyId'>) => Promise<void>
+  registerCompany: (c: Omit<Company, 'id' | 'status'>) => Promise<void>
   addFaculty: (f: Omit<Faculty, 'id'>) => void
   verifyStudent: (id: string, approve: boolean, reason?: string) => void
   verifyCompany: (id: string, approve: boolean, reason?: string) => void
@@ -403,98 +403,133 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     toast.success(`Email sent to ${to}`, { description: subject })
   }, [])
 
-  const login: PortalState['login'] = (email, pass) => {
+  const login: PortalState['login'] = async (email, pass) => {
     const cleanEmail = email.trim().toLowerCase()
     const cleanPass = pass.trim()
 
-    // 1. Check Admin
-    if (cleanEmail === 'admin@college.edu' || cleanEmail === 'tnp@college.edu') {
-      if (cleanPass !== 'admin123' && cleanPass !== 'password123' && cleanPass !== 'admin') {
-        return { success: false, error: 'Invalid email or password. Please try again.' }
+    const matchUser = (
+      currentStudents: Student[],
+      currentCompanies: Company[],
+      currentFaculty: Faculty[],
+    ) => {
+      // 1. Check Admin
+      if (cleanEmail === 'admin@college.edu' || cleanEmail === 'tnp@college.edu') {
+        if (cleanPass !== 'admin123' && cleanPass !== 'password123' && cleanPass !== 'admin') {
+          return { success: false, error: 'Invalid password. Please try again.' }
+        }
+        const sess: AuthSession = {
+          userId: 'admin1',
+          name: 'T&P Cell Admin',
+          email: cleanEmail,
+          role: 'admin',
+          token: `tok_admin_${Date.now()}`,
+          signedInAt: today(),
+        }
+        setAuthSession(sess)
+        setRole('admin')
+        toast.success('Signed in as Admin / T&P Cell')
+        return { success: true }
       }
-      const sess: AuthSession = {
-        userId: 'admin1',
-        name: 'T&P Cell Admin',
-        email: cleanEmail,
-        role: 'admin',
-        token: `tok_admin_${Date.now()}`,
-        signedInAt: today(),
+
+      // 2. Check Faculty
+      const fMatch = currentFaculty.find((f) => f.email.trim().toLowerCase() === cleanEmail)
+      if (fMatch) {
+        const expectedPass = (fMatch.password || 'faculty123').trim()
+        if (cleanPass !== expectedPass && cleanPass !== 'faculty123' && cleanPass !== 'password123') {
+          return { success: false, error: 'Invalid password. Please try again.' }
+        }
+        const sess: AuthSession = {
+          userId: fMatch.id,
+          name: fMatch.name,
+          email: fMatch.email,
+          role: 'faculty',
+          token: `tok_faculty_${Date.now()}`,
+          signedInAt: today(),
+        }
+        setAuthSession(sess)
+        setRole('faculty')
+        setActingFacultyId(fMatch.id)
+        toast.success(`Signed in as ${fMatch.name}`)
+        return { success: true }
       }
-      setAuthSession(sess)
-      setRole('admin')
-      toast.success('Signed in as Admin / T&P Cell')
-      return { success: true }
+
+      // 3. Check Student
+      const sMatch = currentStudents.find((s) => s.email.trim().toLowerCase() === cleanEmail)
+      if (sMatch) {
+        const expectedPass = (sMatch.password || 'password123').trim()
+        if (cleanPass !== expectedPass && cleanPass !== 'password123') {
+          return { success: false, error: 'Invalid password. Please try again.' }
+        }
+        const sess: AuthSession = {
+          userId: sMatch.id,
+          name: sMatch.name,
+          email: sMatch.email,
+          role: 'student',
+          token: `tok_student_${sMatch.id}_${Date.now()}`,
+          signedInAt: today(),
+        }
+        setAuthSession(sess)
+        setRole('student')
+        setActingStudentId(sMatch.id)
+        toast.success(`Signed in as ${sMatch.name}`)
+        return { success: true }
+      }
+
+      // 4. Check Company
+      const cMatch = currentCompanies.find(
+        (c) => c.email?.trim().toLowerCase() === cleanEmail || c.hrEmail.trim().toLowerCase() === cleanEmail,
+      )
+      if (cMatch) {
+        const expectedPass = (cMatch.password || 'password123').trim()
+        if (cleanPass !== expectedPass && cleanPass !== 'password123') {
+          return { success: false, error: 'Invalid password. Please try again.' }
+        }
+        const sess: AuthSession = {
+          userId: cMatch.id,
+          name: cMatch.name,
+          email: cMatch.hrEmail,
+          role: 'company',
+          token: `tok_company_${cMatch.id}_${Date.now()}`,
+          signedInAt: today(),
+        }
+        setAuthSession(sess)
+        setRole('company')
+        setActingCompanyId(cMatch.id)
+        toast.success(`Signed in as ${cMatch.name}`)
+        return { success: true }
+      }
+
+      return null
     }
 
-    // 2. Check Faculty
-    const fMatch = facultyList.find((f) => f.email.toLowerCase() === cleanEmail)
-    if (fMatch) {
-      const expectedPass = (fMatch.password || 'faculty123').trim()
-      if (cleanPass !== expectedPass && cleanPass !== 'faculty123' && cleanPass !== 'password123') {
-        return { success: false, error: 'Invalid email or password. Please try again.' }
+    // Step 1: Check in-memory state
+    const localMatch = matchUser(students, companies, facultyList)
+    if (localMatch) return localMatch
+
+    // Step 2: If not found in local state, query Supabase Cloud live for multi-device sync
+    try {
+      const { data, error } = await supabase
+        .from('portal_data')
+        .select('state')
+        .eq('id', 'main_v1')
+        .single()
+
+      if (!error && data?.state) {
+        const remoteState = data.state as Record<string, unknown>
+        applyRemoteState(remoteState)
+
+        const remoteStudents = Array.isArray(remoteState.students) ? (remoteState.students as Student[]) : students
+        const remoteCompanies = Array.isArray(remoteState.companies) ? (remoteState.companies as Company[]) : companies
+        const remoteFaculty = Array.isArray(remoteState.faculty) ? (remoteState.faculty as Faculty[]) : facultyList
+
+        const cloudMatch = matchUser(remoteStudents, remoteCompanies, remoteFaculty)
+        if (cloudMatch) return cloudMatch
       }
-      const sess: AuthSession = {
-        userId: fMatch.id,
-        name: fMatch.name,
-        email: fMatch.email,
-        role: 'faculty',
-        token: `tok_faculty_${Date.now()}`,
-        signedInAt: today(),
-      }
-      setAuthSession(sess)
-      setRole('faculty')
-      setActingFacultyId(fMatch.id)
-      toast.success(`Signed in as ${fMatch.name}`)
-      return { success: true }
+    } catch {
+      // offline
     }
 
-    // 3. Check Student
-    const sMatch = students.find((s) => s.email.trim().toLowerCase() === cleanEmail)
-    if (sMatch) {
-      const expectedPass = (sMatch.password || 'password123').trim()
-      if (cleanPass !== expectedPass && cleanPass !== 'password123') {
-        return { success: false, error: 'Invalid email or password. Please try again.' }
-      }
-      const sess: AuthSession = {
-        userId: sMatch.id,
-        name: sMatch.name,
-        email: sMatch.email,
-        role: 'student',
-        token: `tok_student_${sMatch.id}_${Date.now()}`,
-        signedInAt: today(),
-      }
-      setAuthSession(sess)
-      setRole('student')
-      setActingStudentId(sMatch.id)
-      toast.success(`Signed in as ${sMatch.name}`)
-      return { success: true }
-    }
-
-    // 4. Check Company
-    const cMatch = companies.find(
-      (c) => c.email?.trim().toLowerCase() === cleanEmail || c.hrEmail.trim().toLowerCase() === cleanEmail,
-    )
-    if (cMatch) {
-      const expectedPass = (cMatch.password || 'password123').trim()
-      if (cleanPass !== expectedPass && cleanPass !== 'password123') {
-        return { success: false, error: 'Invalid email or password. Please try again.' }
-      }
-      const sess: AuthSession = {
-        userId: cMatch.id,
-        name: cMatch.name,
-        email: cMatch.hrEmail,
-        role: 'company',
-        token: `tok_company_${cMatch.id}_${Date.now()}`,
-        signedInAt: today(),
-      }
-      setAuthSession(sess)
-      setRole('company')
-      setActingCompanyId(cMatch.id)
-      toast.success(`Signed in as ${cMatch.name}`)
-      return { success: true }
-    }
-
-    return { success: false, error: 'No account registered with this email' }
+    return { success: false, error: 'No account registered with this email. Please check your spelling or register.' }
   }
 
   const quickLogin: PortalState['quickLogin'] = (targetRole, personaId) => {
@@ -559,7 +594,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     toast.info('Signed out successfully')
   }
 
-  const registerStudent: PortalState['registerStudent'] = (s) => {
+  const registerStudent: PortalState['registerStudent'] = async (s) => {
     const id = uid('s')
     const cleanStudent: Student = {
       ...s,
@@ -570,44 +605,67 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       status: 'pending',
       facultyId: 'f1',
     }
-    const nextStudents = [...students.filter((st) => st.email.toLowerCase() !== cleanStudent.email), cleanStudent]
+
+    // Fetch latest remote students to avoid overwriting concurrent registrations
+    let baseStudents = students
+    let baseCompanies = companies
+    let baseFaculty = facultyList
+
+    try {
+      const { data } = await supabase.from('portal_data').select('state').eq('id', 'main_v1').single()
+      if (data?.state) {
+        const r = data.state as Record<string, unknown>
+        if (Array.isArray(r.students) && r.students.length > 0) baseStudents = r.students as Student[]
+        if (Array.isArray(r.companies) && r.companies.length > 0) baseCompanies = r.companies as Company[]
+        if (Array.isArray(r.faculty) && r.faculty.length > 0) baseFaculty = r.faculty as Faculty[]
+      }
+    } catch {}
+
+    const nextStudents = [...baseStudents.filter((st) => st.email.toLowerCase() !== cleanStudent.email), cleanStudent]
     setStudents(nextStudents)
 
-    // Save immediately to Supabase Cloud
-    supabase
-      .from('portal_data')
-      .upsert({
+    const payload = {
+      students: nextStudents,
+      companies: baseCompanies,
+      faculty: baseFaculty,
+      drives,
+      applications,
+      interviews,
+      internships,
+      documents,
+      weeklyReports,
+      attendance,
+      milestones,
+      feedback,
+      selfPlacements,
+      achievements,
+      threads,
+      messages,
+      notifications,
+      audit,
+      uid: uidCounter,
+    }
+
+    try {
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(payload))
+    } catch {}
+
+    // Await save to Supabase Cloud before completing registration
+    try {
+      await supabase.from('portal_data').upsert({
         id: 'main_v1',
-        state: {
-          students: nextStudents,
-          companies,
-          faculty: facultyList,
-          drives,
-          applications,
-          interviews,
-          internships,
-          documents,
-          weeklyReports,
-          attendance,
-          milestones,
-          feedback,
-          selfPlacements,
-          achievements,
-          threads,
-          messages,
-          notifications,
-          audit,
-          uid: uidCounter,
-        },
+        state: payload,
         updated_at: new Date().toISOString(),
       })
-      .then(() => {})
+    } catch (err) {
+      console.error('Supabase registration sync error:', err)
+    }
 
     notify('admin', 'New student registration', `${cleanStudent.name} submitted documents for verification.`)
     emailToast(cleanStudent.email, 'Registration received — pending verification')
   }
 
-  const registerCompany: PortalState['registerCompany'] = (c) => {
+  const registerCompany: PortalState['registerCompany'] = async (c) => {
     const id = uid('c')
     const cleanCompany: Company = {
       ...c,
@@ -618,38 +676,59 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       password: (c.password || 'password123').trim(),
       status: 'pending',
     }
-    const nextCompanies = [...companies.filter((co) => co.hrEmail.toLowerCase() !== cleanCompany.hrEmail), cleanCompany]
+
+    let baseStudents = students
+    let baseCompanies = companies
+    let baseFaculty = facultyList
+
+    try {
+      const { data } = await supabase.from('portal_data').select('state').eq('id', 'main_v1').single()
+      if (data?.state) {
+        const r = data.state as Record<string, unknown>
+        if (Array.isArray(r.students) && r.students.length > 0) baseStudents = r.students as Student[]
+        if (Array.isArray(r.companies) && r.companies.length > 0) baseCompanies = r.companies as Company[]
+        if (Array.isArray(r.faculty) && r.faculty.length > 0) baseFaculty = r.faculty as Faculty[]
+      }
+    } catch {}
+
+    const nextCompanies = [...baseCompanies.filter((co) => co.hrEmail.toLowerCase() !== cleanCompany.hrEmail), cleanCompany]
     setCompanies(nextCompanies)
 
-    // Save immediately to Supabase Cloud
-    supabase
-      .from('portal_data')
-      .upsert({
+    const payload = {
+      students: baseStudents,
+      companies: nextCompanies,
+      faculty: baseFaculty,
+      drives,
+      applications,
+      interviews,
+      internships,
+      documents,
+      weeklyReports,
+      attendance,
+      milestones,
+      feedback,
+      selfPlacements,
+      achievements,
+      threads,
+      messages,
+      notifications,
+      audit,
+      uid: uidCounter,
+    }
+
+    try {
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(payload))
+    } catch {}
+
+    try {
+      await supabase.from('portal_data').upsert({
         id: 'main_v1',
-        state: {
-          students,
-          companies: nextCompanies,
-          faculty: facultyList,
-          drives,
-          applications,
-          interviews,
-          internships,
-          documents,
-          weeklyReports,
-          attendance,
-          milestones,
-          feedback,
-          selfPlacements,
-          achievements,
-          threads,
-          messages,
-          notifications,
-          audit,
-          uid: uidCounter,
-        },
+        state: payload,
         updated_at: new Date().toISOString(),
       })
-      .then(() => {})
+    } catch (err) {
+      console.error('Supabase company registration sync error:', err)
+    }
 
     notify('admin', 'New company registration', `${cleanCompany.name} submitted registration for verification.`)
     emailToast(cleanCompany.hrEmail, 'Registration received — pending admin approval')

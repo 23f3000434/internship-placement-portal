@@ -19,7 +19,7 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const handleCredentialLogin = (e: React.FormEvent) => {
+  const handleCredentialLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     if (!email.trim()) {
@@ -31,12 +31,17 @@ export default function SignInPage() {
       return
     }
     setLoading(true)
-    const res = login(email, password)
-    setLoading(false)
-    if (res.success) {
-      router.push('/dashboard')
-    } else {
-      setError(res.error || 'Invalid credentials. Check your email or password.')
+    try {
+      const res = await login(email, password)
+      if (res.success) {
+        router.push('/dashboard')
+      } else {
+        setError(res.error || 'Invalid credentials. Check your email or password.')
+      }
+    } catch {
+      setError('Login connection error. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 

@@ -43,7 +43,9 @@ export default function RegisterStudentPage() {
 
   const branches = Array.from(new Set(students.map((s) => s.branch)))
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -57,24 +59,30 @@ export default function RegisterStudentPage() {
       return
     }
 
-    registerStudent({
-      name,
-      email,
-      password,
-      enrollment,
-      branch,
-      cgpa: Number.parseFloat(cgpa) || 0,
-      backlogs: Number.parseInt(backlogs, 10) || 0,
-      passingYear: Number.parseInt(passingYear, 10) || new Date().getFullYear(),
-      skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
-      certifications: certifications.split(',').map((s) => s.trim()).filter(Boolean),
-      phone: phone.trim() || undefined,
-      locationPreference: locationPref,
-      resumeUploaded: Boolean(resumeFileName),
-      idDocsUploaded: Boolean(idDocsFileName),
-    })
-
-    router.push('/pending')
+    setSubmitting(true)
+    try {
+      await registerStudent({
+        name,
+        email,
+        password,
+        enrollment,
+        branch,
+        cgpa: Number.parseFloat(cgpa) || 0,
+        backlogs: Number.parseInt(backlogs, 10) || 0,
+        passingYear: Number.parseInt(passingYear, 10) || new Date().getFullYear(),
+        skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
+        certifications: certifications.split(',').map((s) => s.trim()).filter(Boolean),
+        phone: phone.trim() || undefined,
+        locationPreference: locationPref,
+        resumeUploaded: Boolean(resumeFileName),
+        idDocsUploaded: Boolean(idDocsFileName),
+      })
+      router.push('/pending')
+    } catch {
+      setError('Failed to submit registration. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (

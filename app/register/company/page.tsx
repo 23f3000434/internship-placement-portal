@@ -30,7 +30,9 @@ export default function CompanyRegisterPage() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }))
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -44,18 +46,25 @@ export default function CompanyRegisterPage() {
       return
     }
 
-    registerCompany({
-      name: form.name,
-      industry: form.industry,
-      website: form.website,
-      hrName: form.hrName,
-      hrEmail: form.hrEmail,
-      location: form.location,
-      about: form.about,
-      password: form.password,
-      certificateUploaded: Boolean(certFileName),
-    })
-    router.push('/pending')
+    setSubmitting(true)
+    try {
+      await registerCompany({
+        name: form.name,
+        industry: form.industry,
+        website: form.website,
+        hrName: form.hrName,
+        hrEmail: form.hrEmail,
+        location: form.location,
+        about: form.about,
+        password: form.password,
+        certificateUploaded: Boolean(certFileName),
+      })
+      router.push('/pending')
+    } catch {
+      setError('Failed to submit company registration. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
