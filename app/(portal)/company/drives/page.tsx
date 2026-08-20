@@ -67,6 +67,7 @@ export default function CompanyDrivesPage() {
               <TableHead className="text-right">Applicants</TableHead>
               <TableHead>Deadline</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -99,12 +100,17 @@ export default function CompanyDrivesPage() {
                   <TableCell>
                     <StatusBadge status={d.status} />
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm" render={<Link href={`/drives/${d.id}`} />}>
+                      Open
+                    </Button>
+                  </TableCell>
                 </TableRow>
               )
             })}
             {myDrives.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   No drives published yet.
                 </TableCell>
               </TableRow>

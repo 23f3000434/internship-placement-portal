@@ -37,49 +37,96 @@ export default function RegisterStudentPage() {
   const [phone, setPhone] = useState('')
   const [locationPref, setLocationPref] = useState<Student['locationPreference']>('any')
 
-  const [resumeFileName, setResumeFileName] = useState<string | null>(null)
-  const [idDocsFileName, setIdDocsFileName] = useState<string | null>(null)
+  const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [idDocsFile, setIdDocsFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const branches = Array.from(new Set(students.map((s) => s.branch)))
 
   const [submitting, setSubmitting] = useState(false)
+  const maxFileSize = 2 * 1024 * 1024
+
+  const readAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(new Error(`Could not read ${file.name}.`))
+      reader.readAsDataURL(file)
+    })
+
+  const validateFile = (file: File, kind: 'resume' | 'identity') => {
+    const allowed =
+      kind === 'resume'
+        ? ['application/pdf']
+        : ['application/pdf', 'image/jpeg', 'image/png']
+    if (!allowed.includes(file.type)) {
+      return kind === 'resume'
+        ? 'Resume must be a PDF file.'
+        : 'Identity document must be a PDF, JPG, or PNG file.'
+    }
+    if (file.size > maxFileSize) return `${file.name} must be smaller than 2 MB.`
+    return null
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
+    if (!name.trim() || !email.trim() || !enrollment.trim() || !branch.trim() || !phone.trim()) {
+      setError('Please complete every required field.')
+      return
+    }
+    if (!/^\+?[0-9][0-9\s-]{7,14}$/.test(phone.trim())) {
+      setError('Enter a valid phone number with 8 to 15 digits.')
+      return
+    }
     if (password.length < 6) {
       setError('Password must be at least 6 characters long.')
       return
     }
-
     if (password !== confirmPassword) {
       setError('Passwords do not match.')
+      return
+    }
+    if (!resumeFile || !idDocsFile) {
+      setError('Resume and identity document are required.')
+      return
+    }
+    const fileError = validateFile(resumeFile, 'resume') || validateFile(idDocsFile, 'identity')
+    if (fileError) {
+      setError(fileError)
       return
     }
 
     setSubmitting(true)
     try {
+      const [resumeData, idDocsData] = await Promise.all([
+        readAsDataUrl(resumeFile),
+        readAsDataUrl(idDocsFile),
+      ])
       await registerStudent({
-        name,
-        email,
+        name: name.trim(),
+        email: email.trim(),
         password,
-        enrollment,
+        enrollment: enrollment.trim(),
         branch,
-        cgpa: Number.parseFloat(cgpa) || 0,
-        backlogs: Number.parseInt(backlogs, 10) || 0,
-        passingYear: Number.parseInt(passingYear, 10) || new Date().getFullYear(),
+        cgpa: Number.parseFloat(cgpa),
+        backlogs: Number.parseInt(backlogs, 10),
+        passingYear: Number.parseInt(passingYear, 10),
         skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
         certifications: certifications.split(',').map((s) => s.trim()).filter(Boolean),
-        phone: phone.trim() || undefined,
+        phone: phone.trim(),
         locationPreference: locationPref,
-        resumeUploaded: Boolean(resumeFileName),
-        idDocsUploaded: Boolean(idDocsFileName),
+        resumeUploaded: true,
+        resumeName: resumeFile.name,
+        resumeData,
+        idDocsUploaded: true,
+        idDocsName: idDocsFile.name,
+        idDocsData,
       })
       router.push('/pending')
-    } catch {
-      setError('Failed to submit registration. Please try again.')
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Failed to submit registration. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -185,6 +232,7 @@ export default function RegisterStudentPage() {
               <Input
                 id="phone"
                 type="tel"
+                required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+91 90000 00000"
@@ -234,17 +282,19 @@ export default function RegisterStudentPage() {
                   <Upload className="mr-1.5 size-3.5" /> Choose PDF
                   <input
                     type="file"
-                    accept=".pdf"
+                    accept="application/pdf,.pdf"
+                    required
                     className="sr-only"
                     onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) setResumeFileName(f.name)
+                      const file = e.target.files?.[0] ?? null
+                      setResumeFile(file)
+                      setError(file ? validateFile(file, 'resume') : null)
                     }}
                   />
                 </label>
-                {resumeFileName ? (
+                {resumeFile ? (
                   <span className="flex items-center gap-1 text-xs text-foreground font-medium truncate">
-                    <CheckCircle2 className="size-3.5 text-foreground shrink-0" /> {resumeFileName}
+                    <CheckCircle2 className="size-3.5 text-foreground shrink-0" /> {resumeFile.name}
                   </span>
                 ) : (
                   <span className="text-xs text-muted-foreground">No file selected</span>
@@ -260,17 +310,19 @@ export default function RegisterStudentPage() {
                   <Upload className="mr-1.5 size-3.5" /> Choose Document
                   <input
                     type="file"
-                    accept=".pdf,.jpg,.png"
+                    accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                    required
                     className="sr-only"
                     onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) setIdDocsFileName(f.name)
+                      const file = e.target.files?.[0] ?? null
+                      setIdDocsFile(file)
+                      setError(file ? validateFile(file, 'identity') : null)
                     }}
                   />
                 </label>
-                {idDocsFileName ? (
+                {idDocsFile ? (
                   <span className="flex items-center gap-1 text-xs text-foreground font-medium truncate">
-                    <CheckCircle2 className="size-3.5 text-foreground shrink-0" /> {idDocsFileName}
+                    <CheckCircle2 className="size-3.5 text-foreground shrink-0" /> {idDocsFile.name}
                   </span>
                 ) : (
                   <span className="text-xs text-muted-foreground">No file selected</span>
@@ -279,8 +331,8 @@ export default function RegisterStudentPage() {
             </div>
           </div>
 
-          <Button type="submit" className="w-full mt-4">
-            Submit Registration for T&amp;P Verification
+          <Button type="submit" className="w-full mt-4" disabled={submitting}>
+            {submitting ? 'Submitting registration…' : 'Submit Registration for T&P Verification'}
           </Button>
         </FieldGroup>
       </form>

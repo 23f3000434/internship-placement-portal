@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Building2,
@@ -50,6 +50,31 @@ export function DocumentViewerModal({
   const p = usePortal()
   const [rejectReason, setRejectReason] = useState('')
   const [isRejecting, setIsRejecting] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let url: string | null = null
+    const updatePreview = () => {
+      if (!doc.fileData?.startsWith('data:')) {
+        setPreviewUrl(null)
+        return
+      }
+      const [metadata, encoded = ''] = doc.fileData.split(',', 2)
+      const mime = metadata.match(/^data:([^;]+)/)?.[1] ?? 'application/octet-stream'
+      try {
+        const binary = atob(encoded)
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+        url = URL.createObjectURL(new Blob([bytes], { type: mime }))
+        setPreviewUrl(url)
+      } catch {
+        setPreviewUrl(null)
+      }
+    }
+    queueMicrotask(updatePreview)
+    return () => {
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [doc.fileData])
 
   // Safe fallback resolution for student, company, and internship
   const s =
@@ -201,20 +226,31 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
           </div>
 
           {/* Real PDF / Image embedded viewer if base64 data available */}
-          {doc.fileData && doc.fileData.startsWith('data:image') && (
-            <div className="rounded-lg border overflow-hidden bg-black/5 p-2">
+          {previewUrl && doc.fileData?.startsWith('data:image') && (
+            <div className="rounded-lg border overflow-hidden bg-muted/40 p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={doc.fileData} alt={label} className="w-full object-contain max-h-80 rounded" />
+              <img src={previewUrl} alt={label} className="w-full object-contain max-h-80 rounded" />
             </div>
           )}
 
-          {doc.fileData && doc.fileData.startsWith('data:application/pdf') && (
+          {previewUrl && doc.fileData?.startsWith('data:application/pdf') && (
             <div className="rounded-lg border overflow-hidden">
-              <iframe
-                src={doc.fileData}
-                className="w-full h-96 border-0"
-                title={`Embedded ${label}`}
-              />
+              <object
+                data={previewUrl}
+                type="application/pdf"
+                className="w-full h-96"
+                aria-label={`Preview of ${label}`}
+              >
+                <p className="p-4 text-sm text-muted-foreground">
+                  PDF preview is unavailable. Use Download File to open the original document.
+                </p>
+              </object>
+            </div>
+          )}
+
+          {!doc.fileData && (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              This legacy record does not contain the original file. The verified text record below is available for download.
             </div>
           )}
 

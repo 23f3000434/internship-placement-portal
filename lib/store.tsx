@@ -193,8 +193,8 @@ interface PortalState {
   addAchievement: (a: Omit<Achievement, 'id' | 'studentId' | 'status'>) => void
   reviewAchievement: (id: string, approve: boolean) => void
   addCompanyByStudent: (name: string, industry: string, website: string) => void
-  sendMessage: (threadId: string, body: string, attachmentName?: string) => void
-  createThread: (subject: string, toRole: Role, body: string) => void
+  sendMessage: (threadId: string, body: string, attachmentName?: string) => Promise<void>
+  createThread: (subject: string, toRole: Role, body: string, targetId?: string) => Promise<string>
   markThreadRead: (threadId: string) => void
   markNotificationsRead: () => void
   setAtRisk: (studentId: string, flag: boolean) => void
@@ -704,39 +704,48 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const registerStudent: PortalState['registerStudent'] = async (s) => {
-    const id = uid('s')
+    const email = s.email.trim().toLowerCase()
+    const phone = s.phone?.trim() ?? ''
+    if (!s.name.trim() || !email || !s.enrollment.trim() || !s.branch.trim() || !phone) {
+      throw new Error('Please complete every required field.')
+    }
+    if (!/^\+?[0-9][0-9\s-]{7,14}$/.test(phone)) throw new Error('Enter a valid phone number.')
+    if (!s.resumeUploaded || !s.resumeName || !s.resumeData?.startsWith('data:application/pdf')) {
+      throw new Error('A valid PDF resume is required.')
+    }
+    if (!s.idDocsUploaded || !s.idDocsName || !s.idDocsData?.startsWith('data:')) {
+      throw new Error('A valid identity document is required.')
+    }
+    if (students.some((student) => student.email.trim().toLowerCase() === email)) {
+      throw new Error('An account with this email already exists.')
+    }
+
     const cleanStudent: Student = {
       ...s,
-      id,
+      id: uid('s'),
       name: s.name.trim(),
-      email: s.email.trim().toLowerCase(),
-      password: (s.password || 'password123').trim(),
+      email,
+      enrollment: s.enrollment.trim(),
+      phone,
+      password: (s.password || '').trim(),
       status: 'pending',
       facultyId: 'f1',
     }
 
-    // 1. Deduplicate and update local state immediately
-    const nextStudents = dedupeStudents([
-      ...students.filter((st) => st.email.trim().toLowerCase() !== cleanStudent.email),
-      cleanStudent,
-    ])
-    setStudents(nextStudents)
-
-    // 2. Post atomic registration to server API
-    try {
-      const res = await fetch('/api/portal/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'register_student', student: cleanStudent }),
-      })
-      const data = await res.json()
-      if (data.students && Array.isArray(data.students)) {
-        setStudents(dedupeStudents(data.students as Student[]))
-      }
-    } catch (err) {
-      console.error('Registration server sync error:', err)
+    const res = await fetch('/api/portal/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'register_student', student: cleanStudent }),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !data?.synced) {
+      throw new Error(data?.error || 'Registration could not be saved. Please try again.')
     }
 
+    const nextStudents = Array.isArray(data.students)
+      ? dedupeStudents(data.students as Student[])
+      : dedupeStudents([...students, cleanStudent])
+    setStudents(nextStudents)
     notify('admin', 'New student registration', `${cleanStudent.name} submitted documents for verification.`)
     emailToast(cleanStudent.email, 'Registration received — pending verification')
   }
@@ -856,14 +865,26 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const createDrive: PortalState['createDrive'] = (d) => {
-    const updated = [{ ...d, id: uid('d'), companyId: actingCompanyId, status: 'open' }, ...drives]
+    const company = companies.find((item) => item.id === actingCompanyId)
+    if (role !== 'company' || company?.status !== 'approved') {
+      throw new Error('Only approved companies can publish internship drives.')
+    }
+    if (!d.title.trim() || !d.description.trim() || !d.field.trim() || !d.location.trim()) {
+      throw new Error('Complete all required drive details.')
+    }
+    if (d.stipend < 0 || d.durationWeeks <= 0 || d.openings <= 0) {
+      throw new Error('Stipend, duration, and openings contain invalid values.')
+    }
+    if (!(d.openDate <= d.deadline && d.deadline < d.startDate && d.startDate < d.endDate)) {
+      throw new Error('Drive timeline dates are invalid.')
+    }
+    const updated = [{ ...d, id: uid('d'), companyId: actingCompanyId, status: 'open' as const }, ...drives]
     setDrives(updated)
     syncToCloud({ drives: updated })
-    const c = companies.find((x) => x.id === actingCompanyId)
-    notify('admin', 'New drive published', `${c?.name} published "${d.title}".`)
-    notify('student', 'New internship drive', `${c?.name} is hiring: ${d.title}.`)
+    notify('admin', 'New drive published', `${company.name} published "${d.title}".`)
+    notify('student', 'New internship drive', `${company.name} is hiring: ${d.title}.`)
     toast.success('Drive published', { description: 'Students matching the filters have been notified.' })
-    log(c?.name ?? 'Company', 'Published drive', d.title)
+    log(company.name, 'Published drive', d.title)
   }
 
   const applyToDrive: PortalState['applyToDrive'] = (driveId) => {
@@ -1279,13 +1300,25 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     toast.success('Company submitted', { description: 'Sent to admin for approval.' })
   }
 
-  const sendMessage: PortalState['sendMessage'] = (threadId, body, attachmentName) => {
+  const sendMessage: PortalState['sendMessage'] = async (threadId, body, attachmentName) => {
+    const cleanBody = body.trim()
     const currentUserId = authSession?.userId || (role === 'student' ? actingStudentId : role === 'company' ? actingCompanyId : role === 'faculty' ? actingFacultyId : 'admin1')
+    const currentThread = threads.find((thread) => thread.id === threadId)
+    if (!cleanBody || !currentThread?.participantIds?.includes(currentUserId)) {
+      throw new Error('This conversation is unavailable.')
+    }
     const names: Record<Role, string> = {
       student: students.find((s) => s.id === currentUserId)?.name ?? authSession?.name ?? 'Student',
       company: companies.find((c) => c.id === currentUserId)?.name ?? authSession?.name ?? 'Company',
-      faculty: facultyList.find((f) => f.id === currentUserId)?.name ?? 'Prof. R. Kulkarni',
+      faculty: facultyList.find((f) => f.id === currentUserId)?.name ?? 'Faculty Mentor',
       admin: 'T&P Cell',
+    }
+    const recipientIds = currentThread.participantIds.filter((id) => id !== currentUserId)
+    const recipientRoles = currentThread.participants.filter((participantRole) => participantRole !== role)
+    const updatedThread: Thread = {
+      ...currentThread,
+      unreadFor: recipientRoles,
+      unreadForIds: recipientIds,
     }
     const newMsg: Message = {
       id: uid('msg'),
@@ -1293,55 +1326,57 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       fromRole: role,
       fromUserId: currentUserId,
       fromName: names[role],
-      body,
-      at: today(),
+      body: cleanBody,
+      at: new Date().toISOString(),
       attachmentName,
     }
-    const updatedMsgs = [...messages, newMsg]
-    const updatedThreads = threads.map((t) =>
-      t.id === threadId
-        ? { ...t, unreadFor: t.participants.filter((p) => p !== role) }
-        : t,
-    )
-    setMessages(updatedMsgs)
-    setThreads(updatedThreads)
-    syncToCloud({ messages: updatedMsgs, threads: updatedThreads })
-    toast.success('Message sent', { description: 'Notification delivered to the recipient.' })
+    const res = await fetch('/api/portal/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'send_message', message: newMsg, thread: updatedThread }),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !data?.synced) throw new Error(data?.error || 'Message could not be delivered.')
+    setMessages(data.messages as Message[])
+    setThreads(data.threads as Thread[])
+    toast.success('Message sent', { description: 'Delivered to the recipient.' })
   }
 
-  const createThread: PortalState['createThread'] = (subject, toRole, body, targetId) => {
+  const createThread: PortalState['createThread'] = async (subject, toRole, body, targetId) => {
+    const cleanSubject = subject.trim()
+    const cleanBody = body.trim()
     const currentUserId = authSession?.userId || (role === 'student' ? actingStudentId : role === 'company' ? actingCompanyId : role === 'faculty' ? actingFacultyId : 'admin1')
-    const targetRecipientId = targetId || (toRole === 'admin' ? 'admin1' : toRole === 'faculty' ? actingFacultyId : undefined)
-    
-    let targetName = 'T&P Cell'
-    if (toRole === 'faculty') {
-      targetName = facultyList.find((f) => f.id === targetRecipientId)?.name ?? 'Faculty Mentor'
-    } else if (toRole === 'company') {
-      targetName = companies.find((c) => c.id === targetRecipientId)?.name ?? 'Hiring Partner'
-    } else if (toRole === 'student') {
-      targetName = students.find((s) => s.id === targetRecipientId)?.name ?? 'Student'
+    const targetRecipientId = targetId || (toRole === 'admin' ? 'admin1' : undefined)
+    if (!cleanSubject || !cleanBody || !targetRecipientId || targetRecipientId === currentUserId) {
+      throw new Error('Choose a valid recipient and complete the subject and message.')
     }
 
-    const myName =
-      role === 'student'
-        ? students.find((s) => s.id === currentUserId)?.name ?? authSession?.name ?? 'Student'
-        : role === 'company'
-          ? companies.find((c) => c.id === currentUserId)?.name ?? authSession?.name ?? 'Company'
-          : role === 'faculty'
-            ? facultyList.find((f) => f.id === currentUserId)?.name ?? 'Faculty Mentor'
-            : 'T&P Cell'
+    const targetName = toRole === 'faculty'
+      ? facultyList.find((f) => f.id === targetRecipientId)?.name
+      : toRole === 'company'
+        ? companies.find((c) => c.id === targetRecipientId)?.name
+        : toRole === 'student'
+          ? students.find((s) => s.id === targetRecipientId)?.name
+          : 'T&P Cell'
+    if (!targetName) throw new Error('The selected recipient no longer exists.')
+
+    const myName = role === 'student'
+      ? students.find((s) => s.id === currentUserId)?.name ?? authSession?.name ?? 'Student'
+      : role === 'company'
+        ? companies.find((c) => c.id === currentUserId)?.name ?? authSession?.name ?? 'Company'
+        : role === 'faculty'
+          ? facultyList.find((f) => f.id === currentUserId)?.name ?? 'Faculty Mentor'
+          : 'T&P Cell'
 
     const threadId = uid('t')
-    const participantIds = [currentUserId]
-    if (targetRecipientId) participantIds.push(targetRecipientId)
-
     const newThread: Thread = {
       id: threadId,
-      subject,
+      subject: cleanSubject,
       participants: [role, toRole],
-      participantIds,
+      participantIds: [currentUserId, targetRecipientId],
       participantNames: `${myName} ↔ ${targetName}`,
       unreadFor: [toRole],
+      unreadForIds: [targetRecipientId],
     }
     const newMsg: Message = {
       id: uid('msg'),
@@ -1349,20 +1384,33 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       fromRole: role,
       fromUserId: currentUserId,
       fromName: myName,
-      body,
-      at: today(),
+      body: cleanBody,
+      at: new Date().toISOString(),
     }
-
-    const updatedThreads = [newThread, ...threads]
-    const updatedMsgs = [...messages, newMsg]
-    setThreads(updatedThreads)
-    setMessages(updatedMsgs)
-    syncToCloud({ threads: updatedThreads, messages: updatedMsgs })
-    toast.success('Message sent', { description: `Notification delivered to ${targetName}.` })
+    const res = await fetch('/api/portal/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create_thread', thread: newThread, message: newMsg }),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !data?.synced) throw new Error(data?.error || 'Message could not be delivered.')
+    setThreads(data.threads as Thread[])
+    setMessages(data.messages as Message[])
+    toast.success('Message sent', { description: `Delivered to ${targetName}.` })
+    return threadId
   }
 
   const markThreadRead: PortalState['markThreadRead'] = (threadId) => {
-    const updated = threads.map((t) => (t.id === threadId ? { ...t, unreadFor: t.unreadFor.filter((r) => r !== role) } : t))
+    const currentUserId = authSession?.userId || (role === 'student' ? actingStudentId : role === 'company' ? actingCompanyId : role === 'faculty' ? actingFacultyId : 'admin1')
+    const updated = threads.map((thread) =>
+      thread.id === threadId && thread.participantIds?.includes(currentUserId)
+        ? {
+            ...thread,
+            unreadFor: thread.unreadFor.filter((participantRole) => participantRole !== role),
+            unreadForIds: thread.unreadForIds?.filter((id) => id !== currentUserId),
+          }
+        : thread,
+    )
     setThreads(updated)
     syncToCloud({ threads: updated })
   }
