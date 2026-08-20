@@ -163,7 +163,7 @@ export default function AchievementsPage() {
                   type="button"
                   onClick={() => setUploadMode('file')}
                   className={cn(
-                    'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                    'px-2.5 py-1 rounded text-xs font-medium transition-colors',
                     uploadMode === 'file' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                   )}
                 >
@@ -173,13 +173,17 @@ export default function AchievementsPage() {
                   type="button"
                   onClick={() => setUploadMode('url')}
                   className={cn(
-                    'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                    'px-2.5 py-1 rounded text-xs font-medium transition-colors',
                     uploadMode === 'url' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                   )}
                 >
-                  Drive Link
+                  Google Drive Link
                 </button>
               </div>
+            </div>
+
+            <div className="rounded-md bg-muted/40 p-2.5 text-[11px] text-muted-foreground border border-dashed">
+              💡 <strong>Tip:</strong> You can upload your certificate PDF/image directly, or upload it to <strong>Google Drive</strong> and paste the link here for instant preview.
             </div>
 
             {uploadMode === 'file' ? (

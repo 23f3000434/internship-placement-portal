@@ -185,7 +185,7 @@ export default function ReportsPage() {
                     type="button"
                     onClick={() => setUploadMode('file')}
                     className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                      'px-2.5 py-1 rounded text-xs font-medium transition-colors',
                       uploadMode === 'file' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                     )}
                   >
@@ -195,13 +195,17 @@ export default function ReportsPage() {
                     type="button"
                     onClick={() => setUploadMode('url')}
                     className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                      'px-2.5 py-1 rounded text-xs font-medium transition-colors',
                       uploadMode === 'url' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
                     )}
                   >
-                    Drive Link
+                    Google Drive Link
                   </button>
                 </div>
+              </div>
+
+              <div className="rounded-md bg-muted/40 p-2.5 text-[11px] text-muted-foreground border border-dashed">
+                💡 <strong>Tip:</strong> You can upload a PDF or screenshot directly, or upload files/folders to <strong>Google Drive</strong> and paste the shareable link for instant faculty and company preview.
               </div>
 
               {uploadMode === 'file' ? (
@@ -215,7 +219,7 @@ export default function ReportsPage() {
                   <input
                     id="report-evidence-file"
                     type="file"
-                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.doc,.docx"
                     className="sr-only"
                     onChange={handleFile}
                   />
@@ -229,7 +233,7 @@ export default function ReportsPage() {
                       {evidenceName || 'Attach Evidence (PDF / Image / Doc)'}
                     </span>
                     <span className="block text-[11px] text-muted-foreground">
-                      {evidenceName ? `${evidenceName} · Attached` : 'Optional — click to select file'}
+                      {evidenceName ? `${evidenceName} · Attached` : 'Click to select file (up to 25 MB)'}
                     </span>
                   </span>
                   {evidenceName && (
@@ -250,18 +254,18 @@ export default function ReportsPage() {
                   )}
                 </label>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <div className="relative">
-                    <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                    <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                     <Input
                       value={evidenceUrl}
                       onChange={(e) => setEvidenceUrl(e.target.value)}
                       placeholder="https://drive.google.com/file/d/..."
-                      className="pl-8 text-xs"
+                      className="pl-9 text-xs"
                     />
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    Paste Google Drive link with work samples, commit URLs, or demo documents.
+                    Paste public Google Drive file/folder link, Github commit link, or presentation URL.
                   </p>
                 </div>
               )}

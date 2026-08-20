@@ -383,6 +383,9 @@ export default function SelfPlacementPage() {
           </div>
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-1 text-sm font-medium">Verification Documents</legend>
+            <div className="rounded-md bg-muted/40 p-2.5 text-[11px] text-muted-foreground border border-dashed mb-1">
+              💡 <strong>Tip:</strong> You can upload files directly (up to 25MB), or click <strong>Drive Link</strong> to paste your Google Drive or cloud storage link for instant previews.
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <UploadToggle id="sp-offer" label="Offer letter" required value={offerDoc} onChange={setOfferDoc} />
               <UploadToggle id="sp-joining" label="Joining letter" value={joiningDoc} onChange={setJoiningDoc} />
