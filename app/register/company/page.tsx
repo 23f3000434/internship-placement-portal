@@ -60,8 +60,8 @@ export default function CompanyRegisterPage() {
         certificateUploaded: Boolean(certFileName),
       })
       router.push('/pending')
-    } catch {
-      setError('Failed to submit company registration. Please try again.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit company registration. Please try again.')
     } finally {
       setSubmitting(false)
     }

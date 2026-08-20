@@ -41,7 +41,15 @@ export default function RegisterStudentPage() {
   const [idDocsFile, setIdDocsFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const branches = Array.from(new Set(students.map((s) => s.branch)))
+  const defaultBranches = [
+    'Computer Science',
+    'Information Technology',
+    'Artificial Intelligence & Data Science',
+    'Electronics & Telecommunication',
+    'Mechanical Engineering',
+    'Civil Engineering',
+  ]
+  const branches = Array.from(new Set([...defaultBranches, ...students.map((s) => s.branch)]))
 
   const [submitting, setSubmitting] = useState(false)
   const maxFileSize = 2 * 1024 * 1024

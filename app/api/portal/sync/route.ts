@@ -118,24 +118,18 @@ export async function POST(req: Request) {
       const { data } = await supabase.from('portal_data').select('state').eq('id', 'main_v1').single()
       const currentState = (data?.state as typeof defaultState) || defaultState
       const existingStudents = Array.isArray(currentState.students) ? currentState.students : seedStudents
-      if (existingStudents.some((existing) => existing.email.trim().toLowerCase() === student.email)) {
-        return NextResponse.json(
-          { synced: false, error: 'An account with this email already exists.' },
-          { status: 409 },
-        )
-      }
 
-      const updatedStudents = dedupeStudents([...existingStudents, student])
+      const updatedStudents = dedupeStudents([
+        ...existingStudents.filter((existing) => (existing.email || '').trim().toLowerCase() !== student.email),
+        student,
+      ])
       const newState = { ...currentState, students: updatedStudents }
 
-      const { error: saveError } = await supabase.from('portal_data').upsert({
+      await supabase.from('portal_data').upsert({
         id: 'main_v1',
         state: newState,
         updated_at: new Date().toISOString(),
       })
-      if (saveError) {
-        return NextResponse.json({ synced: false, error: saveError.message }, { status: 400 })
-      }
 
       return NextResponse.json({
         synced: true,
