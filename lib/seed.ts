@@ -21,6 +21,27 @@ import type {
 
 export const seedStudents: Student[] = [
   {
+    id: 's_ashu_01',
+    name: 'Ashu Jagtap',
+    email: 'ashu@gmail.com',
+    password: 'password123',
+    enrollment: 'EN21CS099',
+    branch: 'Computer Science',
+    cgpa: 8.9,
+    backlogs: 0,
+    passingYear: 2026,
+    skills: ['React', 'Next.js', 'TypeScript', 'Node.js', 'Python'],
+    certifications: ['AWS Certified Developer', 'Full Stack Engineering'],
+    phone: '+91 98765 43210',
+    locationPreference: 'any',
+    resumeUploaded: true,
+    resumeName: 'Ashu_Jagtap_Software_Engineer_Resume.pdf',
+    idDocsUploaded: true,
+    idDocsName: 'College_ID_Card.pdf',
+    status: 'approved',
+    facultyId: 'f1',
+  },
+  {
     id: 's1',
     name: 'Aarav Sharma',
     email: 'aarav.sharma@college.edu',
