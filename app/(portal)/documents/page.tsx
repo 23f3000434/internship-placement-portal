@@ -68,9 +68,24 @@ export default function DocumentsPage() {
 
   const ids = new Set(internships.map((n) => n.id))
   // Filter docs for current role/student
-  const studentDocs = p.role === 'student'
-    ? p.documents.filter((d) => ids.has(d.internshipId) || d.internshipId.includes(p.actingStudentId) || d.internshipId === 'general')
-    : p.documents.filter((d) => ids.has(d.internshipId))
+  const studentDocs =
+    p.role === 'admin'
+      ? p.documents
+      : p.role === 'student'
+        ? p.documents.filter(
+            (d) =>
+              ids.has(d.internshipId) ||
+              d.internshipId.includes(p.actingStudentId) ||
+              d.internshipId === 'general',
+          )
+        : p.role === 'faculty'
+          ? p.documents.filter((d) => {
+              if (ids.has(d.internshipId)) return true
+              const internship = p.internships.find((n) => n.id === d.internshipId)
+              const s = internship ? p.students.find((x) => x.id === internship.studentId) : null
+              return s?.facultyId === p.actingFacultyId
+            })
+          : p.documents.filter((d) => ids.has(d.internshipId))
 
   const awaiting = studentDocs.filter((d) => d.status === 'uploaded').length
   const verified = studentDocs.filter((d) => d.status === 'verified').length
@@ -370,8 +385,17 @@ export default function DocumentsPage() {
           open={Boolean(viewDoc)}
           onOpenChange={(open) => !open && setViewDoc(null)}
           doc={viewDoc}
-          internship={internships.find((n) => n.id === viewDoc.internshipId)}
-          student={student}
+          internship={p.internships.find((n) => n.id === viewDoc.internshipId)}
+          student={
+            p.students.find(
+              (s) =>
+                s.id ===
+                (p.internships.find((n) => n.id === viewDoc.internshipId)?.studentId ||
+                  (viewDoc.internshipId.startsWith('intern_')
+                    ? viewDoc.internshipId.replace('intern_', '')
+                    : p.actingStudentId)),
+            ) || student
+          }
         />
       )}
     </>

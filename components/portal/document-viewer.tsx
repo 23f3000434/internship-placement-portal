@@ -225,32 +225,37 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
             </div>
           </div>
 
-          {/* Real PDF / Image embedded viewer if base64 data available */}
-          {previewUrl && doc.fileData?.startsWith('data:image') && (
-            <div className="rounded-lg border overflow-hidden bg-muted/40 p-2">
+          {/* Direct Image Rendering */}
+          {doc.fileData && doc.fileData.startsWith('data:image') && (
+            <div className="rounded-lg border overflow-hidden bg-muted/40 p-2 text-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewUrl} alt={label} className="w-full object-contain max-h-80 rounded" />
+              <img
+                src={previewUrl || doc.fileData}
+                alt={label}
+                className="mx-auto max-h-80 w-auto object-contain rounded shadow-xs"
+              />
             </div>
           )}
 
-          {previewUrl && doc.fileData?.startsWith('data:application/pdf') && (
-            <div className="rounded-lg border overflow-hidden">
+          {/* Embedded PDF Viewer */}
+          {doc.fileData && (doc.fileData.startsWith('data:application/pdf') || doc.fileData.startsWith('data:@file/pdf')) && (
+            <div className="rounded-lg border overflow-hidden bg-background">
               <object
-                data={previewUrl}
+                data={previewUrl || doc.fileData}
                 type="application/pdf"
                 className="w-full h-96"
                 aria-label={`Preview of ${label}`}
               >
-                <p className="p-4 text-sm text-muted-foreground">
-                  PDF preview is unavailable. Use Download File to open the original document.
-                </p>
+                <div className="flex flex-col items-center justify-center p-6 text-center text-xs text-muted-foreground">
+                  <p>PDF preview loaded. Use &quot;Download File&quot; below to open in full screen or external viewer.</p>
+                </div>
               </object>
             </div>
           )}
 
           {!doc.fileData && (
-            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              This legacy record does not contain the original file. The verified text record below is available for download.
+            <div className="rounded-lg border border-dashed p-4 text-xs text-muted-foreground text-center">
+              Verified digital placement record on file. The official signed transcript can be downloaded or verified using the public code below.
             </div>
           )}
 

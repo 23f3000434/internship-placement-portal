@@ -41,6 +41,32 @@ const RECIPIENTS: Record<Role, Role[]> = {
   admin: ['student', 'company', 'faculty'],
 }
 
+function formatMessageTimestamp(dateStr?: string): string {
+  if (!dateStr) return ''
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    
+    const isToday = d.toDateString() === now.toDateString()
+    if (isToday) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    if (d.toDateString() === yesterday.toDateString()) {
+      return `Yesterday, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    }
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  } catch {
+    return dateStr
+  }
+}
+
 export default function MessagesPage() {
   const p = usePortal()
   const currentUserId =
@@ -53,18 +79,27 @@ export default function MessagesPage() {
           ? p.actingFacultyId
           : 'admin1')
 
-  const myThreads = useMemo(
-    () => p.threads.filter((thread) => thread.participantIds?.includes(currentUserId)),
-    [p.threads, currentUserId],
-  )
-  const isUnread = (thread: (typeof p.threads)[number]) =>
-    thread.unreadForIds
-      ? thread.unreadForIds.includes(currentUserId)
-      : thread.unreadFor.includes(p.role)
+  const myThreads = useMemo(() => {
+    if (p.role === 'admin') {
+      return p.threads
+    }
+    return p.threads.filter((thread) => {
+      if (thread.participantIds?.includes(currentUserId)) return true
+      if (thread.participants?.includes(p.role)) return true
+      return false
+    })
+  }, [p.threads, p.role, currentUserId])
+
+  const isUnread = (thread: (typeof p.threads)[number]) => {
+    if (thread.unreadForIds && thread.unreadForIds.length > 0) {
+      return thread.unreadForIds.includes(currentUserId)
+    }
+    return thread.unreadFor?.includes(p.role) ?? false
+  }
 
   const [tab, setTab] = useState('inbox')
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(myThreads[0]?.id ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [reply, setReply] = useState('')
   const [attach, setAttach] = useState('')
   const [composeOpen, setComposeOpen] = useState(false)
@@ -88,7 +123,7 @@ export default function MessagesPage() {
     )
   })
 
-  const selected = myThreads.find((t) => t.id === selectedId) ?? visible[0] ?? null
+  const selected = (selectedId ? myThreads.find((t) => t.id === selectedId) : null) ?? visible[0] ?? null
   const thread = selected
     ? p.messages.filter((m) => m.threadId === selected.id).sort((a, b) => a.at.localeCompare(b.at))
     : []
@@ -158,7 +193,9 @@ export default function MessagesPage() {
                         {t.participantNames}
                       </span>
                       {last && (
-                        <span className="shrink-0 text-[10px] text-muted-foreground">{last.at}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {formatMessageTimestamp(last.at)}
+                        </span>
                       )}
                     </div>
                     <p className={cn('truncate text-xs', threadIsUnread ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
@@ -206,7 +243,7 @@ export default function MessagesPage() {
                       <span>·</span>
                       <span>{ROLE_LABEL[m.fromRole]}</span>
                       <span>·</span>
-                      <span>{m.at}</span>
+                      <span>{formatMessageTimestamp(m.at)}</span>
                     </div>
                     <div
                       className={cn(

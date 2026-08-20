@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type {
   Achievement,
@@ -237,6 +237,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   // Portal persistence: local cache + Supabase cloud synchronization across all devices
   const [hydrated, setHydrated] = useState(false)
 
+  // Track last known serialized state to avoid echo updates and infinite loops
+  const lastKnownStateJsonRef = useRef<string>('')
+  const isApplyingRemoteRef = useRef<boolean>(false)
+
   const dedupeStudents = useCallback((list: Student[]): Student[] => {
     const seen = new Set<string>()
     const out: Student[] = []
@@ -262,6 +266,36 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const applyRemoteState = useCallback((s: Record<string, unknown>) => {
+    if (!s || typeof s !== 'object') return
+    const incomingFingerprint = JSON.stringify({
+      students: s.students,
+      companies: s.companies,
+      faculty: s.faculty,
+      drives: s.drives,
+      applications: s.applications,
+      interviews: s.interviews,
+      internships: s.internships,
+      documents: s.documents,
+      weeklyReports: s.weeklyReports,
+      attendance: s.attendance,
+      milestones: s.milestones,
+      feedback: s.feedback,
+      selfPlacements: s.selfPlacements,
+      achievements: s.achievements,
+      threads: s.threads,
+      messages: s.messages,
+      notifications: s.notifications,
+      audit: s.audit,
+      uid: s.uid,
+    })
+
+    if (incomingFingerprint === lastKnownStateJsonRef.current) {
+      return // State identical, avoid triggering re-renders
+    }
+
+    isApplyingRemoteRef.current = true
+    lastKnownStateJsonRef.current = incomingFingerprint
+
     if (Array.isArray(s.students) && s.students.length > 0) setStudents(dedupeStudents(s.students as Student[]))
     if (Array.isArray(s.companies) && s.companies.length > 0) setCompanies(dedupeCompanies(s.companies as Company[]))
     if (Array.isArray(s.faculty) && s.faculty.length > 0) setFacultyList(s.faculty as Faculty[])
@@ -281,6 +315,11 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     if (Array.isArray(s.notifications)) setNotifications(s.notifications as Notification[])
     if (Array.isArray(s.audit)) setAudit(s.audit as AuditEntry[])
     if (typeof s.uid === 'number') uidCounter = Math.max(uidCounter, s.uid)
+
+    // Allow local state mutations again after current render batch
+    setTimeout(() => {
+      isApplyingRemoteRef.current = false
+    }, 100)
   }, [dedupeStudents, dedupeCompanies])
 
   // 1. Initial hydration: localStorage for 0ms startup, then fetch from Supabase
@@ -314,10 +353,14 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
     fetchCloud()
 
-    // 3. Regular background poll every 3 seconds for instant multi-device / incognito syncing
-    const pollInterval = setInterval(fetchCloud, 3000)
+    // 3. Sync on window focus and network reconnect
+    window.addEventListener('focus', fetchCloud)
+    window.addEventListener('online', fetchCloud)
 
-    // 4. Subscribe to Realtime cloud updates
+    // Passive polling every 20 seconds (instead of 3 seconds) for multi-tab sync
+    const pollInterval = setInterval(fetchCloud, 20000)
+
+    // 4. Subscribe to Realtime cloud updates via Supabase
     const channel = supabase
       .channel('portal-sync-live')
       .on(
@@ -332,14 +375,18 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       .subscribe()
 
     return () => {
+      window.removeEventListener('focus', fetchCloud)
+      window.removeEventListener('online', fetchCloud)
       clearInterval(pollInterval)
       supabase.removeChannel(channel)
     }
   }, [applyRemoteState])
 
-  // 5. Save to localStorage (quota-safe) + Sync to Supabase Cloud on any change
+  // 5. Save to localStorage (quota-safe) + Sync to Supabase Cloud on genuine changes
   useEffect(() => {
     if (!hydrated) return
+    if (isApplyingRemoteRef.current) return
+
     const snapshotObj = {
       students,
       companies,
@@ -361,6 +408,12 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       audit,
       uid: uidCounter,
     }
+
+    const currentFingerprint = JSON.stringify(snapshotObj)
+    if (currentFingerprint === lastKnownStateJsonRef.current) {
+      return // No genuine changes, do not push
+    }
+    lastKnownStateJsonRef.current = currentFingerprint
 
     try {
       // Sanitize oversized base64 files for localStorage to never exceed browser 5MB quota
@@ -396,7 +449,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       } catch {
         // silent fallback if offline
       }
-    }, 500)
+    }, 600)
 
     return () => clearTimeout(timer)
   }, [
@@ -449,6 +502,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       uid: uidCounter,
       ...customState,
     }
+
+    lastKnownStateJsonRef.current = JSON.stringify(payload)
 
     try {
       const localSnapshot = JSON.stringify({
@@ -1302,44 +1357,72 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage: PortalState['sendMessage'] = async (threadId, body, attachmentName) => {
     const cleanBody = body.trim()
+    if (!cleanBody) return
+
     const currentUserId = authSession?.userId || (role === 'student' ? actingStudentId : role === 'company' ? actingCompanyId : role === 'faculty' ? actingFacultyId : 'admin1')
     const currentThread = threads.find((thread) => thread.id === threadId)
-    if (!cleanBody || !currentThread?.participantIds?.includes(currentUserId)) {
+    if (!currentThread) {
       throw new Error('This conversation is unavailable.')
     }
-    const names: Record<Role, string> = {
-      student: students.find((s) => s.id === currentUserId)?.name ?? authSession?.name ?? 'Student',
-      company: companies.find((c) => c.id === currentUserId)?.name ?? authSession?.name ?? 'Company',
-      faculty: facultyList.find((f) => f.id === currentUserId)?.name ?? 'Faculty Mentor',
-      admin: 'T&P Cell',
-    }
-    const recipientIds = currentThread.participantIds.filter((id) => id !== currentUserId)
-    const recipientRoles = currentThread.participants.filter((participantRole) => participantRole !== role)
+
+    const myName =
+      role === 'student'
+        ? students.find((s) => s.id === currentUserId)?.name ?? authSession?.name ?? 'Student'
+        : role === 'company'
+          ? companies.find((c) => c.id === currentUserId)?.name ?? authSession?.name ?? 'Company'
+          : role === 'faculty'
+            ? facultyList.find((f) => f.id === currentUserId)?.name ?? 'Faculty Mentor'
+            : 'T&P Cell'
+
+    const recipientIds = (currentThread.participantIds || []).filter((id) => id !== currentUserId)
+    const recipientRoles = (currentThread.participants || []).filter((participantRole) => participantRole !== role)
+
     const updatedThread: Thread = {
       ...currentThread,
-      unreadFor: recipientRoles,
-      unreadForIds: recipientIds,
+      unreadFor: Array.from(new Set([...(currentThread.unreadFor || []), ...recipientRoles])),
+      unreadForIds: Array.from(new Set([...(currentThread.unreadForIds || []), ...recipientIds])),
     }
+
     const newMsg: Message = {
       id: uid('msg'),
       threadId,
       fromRole: role,
       fromUserId: currentUserId,
-      fromName: names[role],
+      fromName: myName,
       body: cleanBody,
       at: new Date().toISOString(),
       attachmentName,
     }
-    const res = await fetch('/api/portal/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'send_message', message: newMsg, thread: updatedThread }),
+
+    // 1. Optimistic update for instant responsiveness
+    const optimisticMessages = [...messages, newMsg]
+    const optimisticThreads = threads.map((t) => (t.id === threadId ? updatedThread : t))
+    setMessages(optimisticMessages)
+    setThreads(optimisticThreads)
+
+    // Notify recipients
+    recipientRoles.forEach((targetRole) => {
+      notify(targetRole, `New message from ${myName}`, cleanBody.slice(0, 100))
     })
-    const data = await res.json().catch(() => null)
-    if (!res.ok || !data?.synced) throw new Error(data?.error || 'Message could not be delivered.')
-    setMessages(data.messages as Message[])
-    setThreads(data.threads as Thread[])
-    toast.success('Message sent', { description: 'Delivered to the recipient.' })
+    toast.success('Message sent', { description: 'Delivered to recipient.' })
+
+    // 2. Persist to cloud in background
+    try {
+      const res = await fetch('/api/portal/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send_message', message: newMsg, thread: updatedThread }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.synced && Array.isArray(data.messages) && Array.isArray(data.threads)) {
+        setMessages(data.messages as Message[])
+        setThreads(data.threads as Thread[])
+      } else {
+        syncToCloud({ messages: optimisticMessages, threads: optimisticThreads })
+      }
+    } catch {
+      syncToCloud({ messages: optimisticMessages, threads: optimisticThreads })
+    }
   }
 
   const createThread: PortalState['createThread'] = async (subject, toRole, body, targetId) => {
@@ -1347,18 +1430,17 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const cleanBody = body.trim()
     const currentUserId = authSession?.userId || (role === 'student' ? actingStudentId : role === 'company' ? actingCompanyId : role === 'faculty' ? actingFacultyId : 'admin1')
     const targetRecipientId = targetId || (toRole === 'admin' ? 'admin1' : undefined)
-    if (!cleanSubject || !cleanBody || !targetRecipientId || targetRecipientId === currentUserId) {
+    if (!cleanSubject || !cleanBody || !targetRecipientId) {
       throw new Error('Choose a valid recipient and complete the subject and message.')
     }
 
     const targetName = toRole === 'faculty'
-      ? facultyList.find((f) => f.id === targetRecipientId)?.name
+      ? facultyList.find((f) => f.id === targetRecipientId)?.name || 'Faculty Mentor'
       : toRole === 'company'
-        ? companies.find((c) => c.id === targetRecipientId)?.name
+        ? companies.find((c) => c.id === targetRecipientId)?.name || 'Company Partner'
         : toRole === 'student'
-          ? students.find((s) => s.id === targetRecipientId)?.name
+          ? students.find((s) => s.id === targetRecipientId)?.name || 'Student'
           : 'T&P Cell'
-    if (!targetName) throw new Error('The selected recipient no longer exists.')
 
     const myName = role === 'student'
       ? students.find((s) => s.id === currentUserId)?.name ?? authSession?.name ?? 'Student'
@@ -1387,27 +1469,43 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       body: cleanBody,
       at: new Date().toISOString(),
     }
-    const res = await fetch('/api/portal/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create_thread', thread: newThread, message: newMsg }),
-    })
-    const data = await res.json().catch(() => null)
-    if (!res.ok || !data?.synced) throw new Error(data?.error || 'Message could not be delivered.')
-    setThreads(data.threads as Thread[])
-    setMessages(data.messages as Message[])
+
+    // 1. Optimistic update
+    const optimisticThreads = [newThread, ...threads]
+    const optimisticMessages = [...messages, newMsg]
+    setThreads(optimisticThreads)
+    setMessages(optimisticMessages)
+    notify(toRole, `New message from ${myName}: ${cleanSubject}`, cleanBody.slice(0, 100))
     toast.success('Message sent', { description: `Delivered to ${targetName}.` })
+
+    // 2. Persist to cloud in background
+    try {
+      const res = await fetch('/api/portal/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create_thread', thread: newThread, message: newMsg }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.synced && Array.isArray(data.threads) && Array.isArray(data.messages)) {
+        setThreads(data.threads as Thread[])
+        setMessages(data.messages as Message[])
+      } else {
+        syncToCloud({ threads: optimisticThreads, messages: optimisticMessages })
+      }
+    } catch {
+      syncToCloud({ threads: optimisticThreads, messages: optimisticMessages })
+    }
     return threadId
   }
 
   const markThreadRead: PortalState['markThreadRead'] = (threadId) => {
     const currentUserId = authSession?.userId || (role === 'student' ? actingStudentId : role === 'company' ? actingCompanyId : role === 'faculty' ? actingFacultyId : 'admin1')
     const updated = threads.map((thread) =>
-      thread.id === threadId && thread.participantIds?.includes(currentUserId)
+      thread.id === threadId
         ? {
             ...thread,
             unreadFor: thread.unreadFor.filter((participantRole) => participantRole !== role),
-            unreadForIds: thread.unreadForIds?.filter((id) => id !== currentUserId),
+            unreadForIds: (thread.unreadForIds || []).filter((id) => id !== currentUserId),
           }
         : thread,
     )

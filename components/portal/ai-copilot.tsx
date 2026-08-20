@@ -16,10 +16,10 @@ import { checkEligibility } from '@/lib/eligibility'
  */
 export function AiRecommendationWidget({ student }: { student: Student }) {
   const p = usePortal()
-  const openDrives = p.drives.filter((d) => d.status === 'open')
 
   const recommendations = useMemo(() => {
     const studentSkills = student.skills.map((s) => s.trim().toLowerCase())
+    const openDrives = p.drives.filter((d) => d.status === 'open')
 
     return openDrives
       .map((d: Drive) => {
@@ -75,7 +75,7 @@ export function AiRecommendationWidget({ student }: { student: Student }) {
         }
       })
       .sort((a, b) => b.matchPct - a.matchPct)
-  }, [student, openDrives, p.companies])
+  }, [student, p.drives, p.companies])
 
   const topMatches = recommendations.slice(0, 3)
 

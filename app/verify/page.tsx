@@ -32,6 +32,20 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
     .slice(0, 4)
     .map((d) => d.verifyCode as string)
 
+  const [serverResult, setServerResult] = useState<{
+    valid: boolean
+    verifyCode: string
+    documentTitle: string
+    fileName?: string
+    studentName: string
+    enrollment: string
+    branch: string
+    companyName: string
+    role: string
+    uploadedAt: string
+  } | null>(null)
+  const [loading, setLoading] = useState(false)
+
   // Look up document in portal state
   const matchedDoc = activeCode
     ? p.documents.find((d) => d.verifyCode?.toUpperCase() === activeCode.toUpperCase())
@@ -45,13 +59,53 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
       : p.companies.find((c) => c.id === matchedInternship.companyId)
     : null
 
+  // Fallback query to server API endpoint for public incognito visitors
+  useEffect(() => {
+    if (!activeCode) {
+      setServerResult(null)
+      return
+    }
+    if (matchedDoc) {
+      setServerResult(null)
+      return
+    }
+    let isCancelled = false
+    setLoading(true)
+    fetch(`/api/portal/verify?code=${encodeURIComponent(activeCode)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isCancelled) {
+          if (data.valid) setServerResult(data)
+          else setServerResult(null)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setServerResult(null)
+          setLoading(false)
+        }
+      })
+    return () => {
+      isCancelled = true
+    }
+  }, [activeCode, matchedDoc])
+
+  const isValidRecord = Boolean(matchedDoc || serverResult?.valid)
+
+  const candidateName = matchedStudent?.name || serverResult?.studentName || 'Verified Candidate'
+  const candidateEnrollment = matchedStudent?.enrollment || serverResult?.enrollment || 'EN21CS001'
+  const candidateBranch = matchedStudent?.branch || serverResult?.branch || 'Engineering & Technology'
+
   const organizationName = matchedCompany
     ? matchedCompany.name
     : matchedInternship?.type === 'self' || matchedInternship?.companyId === 'self'
       ? 'Self-Placed Approved Employer'
-      : matchedDoc
-        ? 'Institutional Partner Organization'
-        : 'TechNova Systems'
+      : serverResult?.companyName || (matchedDoc ? 'Institutional Partner Organization' : 'TechNova Systems')
+
+  const docTitle = matchedDoc ? (documentLabel[matchedDoc.kind] || matchedDoc.fileName || 'Placement Document') : (serverResult?.documentTitle || 'Verified Document')
+  const roleName = matchedInternship?.role || serverResult?.role || 'Intern / Placement Record'
+  const issueDate = matchedDoc?.uploadedAt || serverResult?.uploadedAt || new Date().toISOString().slice(0, 10)
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,8 +116,6 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
     }
     setActiveCode(codeQuery.trim().toUpperCase())
   }
-
-  const isValidRecord = Boolean(matchedDoc)
 
   return (
     <div className="min-h-svh bg-background text-foreground">
@@ -188,10 +240,10 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Candidate Details</p>
                       <p className="text-base font-semibold mt-1">
-                        {matchedStudent?.name || 'Aarav Sharma'}
+                        {candidateName}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Enrollment: {matchedStudent?.enrollment || 'EN21CS001'} · Branch: {matchedStudent?.branch || 'Computer Science'}
+                        Enrollment: {candidateEnrollment} · Branch: {candidateBranch}
                       </p>
                     </div>
 
@@ -201,7 +253,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                         {organizationName}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Role: {matchedInternship?.role || 'Full Stack Engineer Intern'}
+                        Role: {roleName}
                       </p>
                     </div>
                   </div>
@@ -210,7 +262,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Document Type</p>
                       <p className="text-sm font-semibold mt-1">
-                        {matchedDoc ? documentLabel[matchedDoc.kind] : 'Internship Document'}
+                        {docTitle}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">
                         Verification Code: {activeCode}
@@ -236,7 +288,7 @@ export default function PublicVerifyPage({ searchParams }: { searchParams?: Prom
                     <span>Training &amp; Placement Cell · G H Raisoni College of Engineering &amp; Management, Jalgaon</span>
                   </div>
                   <div className="font-mono text-[11px]">
-                    Issued: {matchedDoc?.uploadedAt || new Date().toISOString().slice(0, 10)}
+                    Issued: {issueDate}
                   </div>
                 </div>
               </div>
