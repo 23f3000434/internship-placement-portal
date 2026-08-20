@@ -49,7 +49,6 @@ import {
   seedWeeklyReports,
 } from './seed'
 import { checkEligibility } from './eligibility'
-import { supabase } from './supabase'
 
 const SNAPSHOT_KEY = 'interntrack.portal.v1'
 
@@ -340,7 +339,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
     setHydrated(true)
 
-    // 2. Fetch latest shared state from REST API endpoint
+    // 2. Fetch latest state from REST endpoint once on startup
     const fetchCloud = async () => {
       try {
         const res = await fetch('/api/portal/sync')
@@ -349,41 +348,39 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
           applyRemoteState(data.state as Record<string, unknown>)
         }
       } catch {
-        // fallback seamlessly to local snapshot
+        // seamless fallback to local snapshot
       }
     }
     fetchCloud()
 
-    // 3. Sync on window focus and network reconnect
-    window.addEventListener('focus', fetchCloud)
-    window.addEventListener('online', fetchCloud)
-
-    // Passive polling every 20 seconds (instead of 3 seconds) for multi-tab sync
-    const pollInterval = setInterval(fetchCloud, 20000)
-
-    // 4. Subscribe to Realtime cloud updates via Supabase
-    const channel = supabase
-      .channel('portal-sync-live')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'portal_data', filter: 'id=eq.main_v1' },
-        (payload) => {
-          if (payload.new && (payload.new as { state?: Record<string, unknown> }).state) {
-            applyRemoteState((payload.new as { state: Record<string, unknown> }).state)
+    // 3. Zero-network instant cross-tab sync via BroadcastChannel
+    let broadcast: BroadcastChannel | null = null
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        broadcast = new BroadcastChannel('interntrack_local_sync')
+        broadcast.onmessage = (event) => {
+          if (event.data && typeof event.data === 'object') {
+            applyRemoteState(event.data as Record<string, unknown>)
           }
-        },
-      )
-      .subscribe()
+        }
+      }
+    } catch {}
 
     return () => {
-      window.removeEventListener('focus', fetchCloud)
-      window.removeEventListener('online', fetchCloud)
-      clearInterval(pollInterval)
-      supabase.removeChannel(channel)
+      if (broadcast) broadcast.close()
     }
   }, [applyRemoteState])
 
-  // 5. Save to localStorage (quota-safe) + Sync to Supabase Cloud on genuine changes
+  // 4. Save to localStorage only on genuine changes (no Supabase writes here — saves API quota)
+  const broadcastRef = useRef<BroadcastChannel | null>(null)
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window && !broadcastRef.current) {
+        broadcastRef.current = new BroadcastChannel('interntrack_local_sync')
+      }
+    } catch {}
+  }, [])
+
   useEffect(() => {
     if (!hydrated) return
     if (isApplyingRemoteRef.current) return
@@ -412,12 +409,11 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
     const currentFingerprint = JSON.stringify(snapshotObj)
     if (currentFingerprint === lastKnownStateJsonRef.current) {
-      return // No genuine changes, do not push
+      return // No genuine changes
     }
     lastKnownStateJsonRef.current = currentFingerprint
 
     try {
-      // Sanitize oversized base64 files for localStorage to never exceed browser 5MB quota
       const localSnapshot = JSON.stringify(
         {
           authSession,
@@ -426,7 +422,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
           actingCompanyId,
           ...snapshotObj,
         },
-        (key, value) => {
+        (_key, value) => {
           if (typeof value === 'string' && value.startsWith('data:') && value.length > 25000) {
             return value.slice(0, 500) + '...[offline_cached]'
           }
@@ -436,23 +432,13 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(SNAPSHOT_KEY, localSnapshot)
       sessionStorage.setItem(SNAPSHOT_KEY, localSnapshot)
     } catch {
-      // local storage quota or unavailable fallback
+      // local storage quota fallback
     }
 
-    // Debounced upload to Supabase cloud
-    const timer = setTimeout(async () => {
-      try {
-        await supabase.from('portal_data').upsert({
-          id: 'main_v1',
-          state: snapshotObj,
-          updated_at: new Date().toISOString(),
-        })
-      } catch {
-        // silent fallback if offline
-      }
-    }, 600)
-
-    return () => clearTimeout(timer)
+    // Notify other tabs via BroadcastChannel (zero network cost)
+    try {
+      broadcastRef.current?.postMessage(snapshotObj)
+    } catch {}
   }, [
     hydrated,
     authSession,
@@ -479,7 +465,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     audit,
   ])
 
-  // Instant Cloud Sync Helper for Immediate Real-Time Database Commits
+  // Local-first sync helper — saves to localStorage only (no Supabase writes on every mutation)
+  // Critical operations like registration and messaging have their own targeted API calls.
   const syncToCloud = useCallback((customState?: Record<string, unknown>) => {
     const payload = {
       students,
@@ -507,22 +494,29 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     lastKnownStateJsonRef.current = JSON.stringify(payload)
 
     try {
-      const localSnapshot = JSON.stringify({
-        authSession,
-        role,
-        actingStudentId,
-        actingCompanyId,
-        ...payload,
-      })
+      const localSnapshot = JSON.stringify(
+        {
+          authSession,
+          role,
+          actingStudentId,
+          actingCompanyId,
+          ...payload,
+        },
+        (_key, value) => {
+          if (typeof value === 'string' && value.startsWith('data:') && value.length > 25000) {
+            return value.slice(0, 500) + '...[offline_cached]'
+          }
+          return value
+        },
+      )
       localStorage.setItem(SNAPSHOT_KEY, localSnapshot)
       sessionStorage.setItem(SNAPSHOT_KEY, localSnapshot)
     } catch {}
 
-    fetch('/api/portal/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch(() => {})
+    // Notify other tabs via BroadcastChannel (zero network cost)
+    try {
+      broadcastRef.current?.postMessage(payload)
+    } catch {}
   }, [
     students,
     companies,
