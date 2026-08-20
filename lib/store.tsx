@@ -49,6 +49,7 @@ import {
   seedWeeklyReports,
 } from './seed'
 import { checkEligibility } from './eligibility'
+import { supabase } from './supabase'
 
 const SNAPSHOT_KEY = 'interntrack.portal.v1'
 
@@ -226,9 +227,32 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const [audit, setAudit] = useState(seedAudit)
   const [facultyList, setFacultyList] = useState<Faculty[]>(faculty)
 
-  // Portal persistence: keep the walkthrough intact across refreshes and deep links.
+  // Portal persistence: local cache + Supabase cloud synchronization across all devices
   const [hydrated, setHydrated] = useState(false)
 
+  const applyRemoteState = useCallback((s: Record<string, unknown>) => {
+    if (s.students) setStudents(s.students as Student[])
+    if (s.companies) setCompanies(s.companies as Company[])
+    if (s.faculty) setFacultyList(s.faculty as Faculty[])
+    if (s.drives) setDrives(s.drives as Drive[])
+    if (s.applications) setApplications(s.applications as Application[])
+    if (s.interviews) setInterviews(s.interviews as Interview[])
+    if (s.internships) setInternships(s.internships as Internship[])
+    if (s.documents) setDocuments(s.documents as InternshipDocument[])
+    if (s.weeklyReports) setWeeklyReports(s.weeklyReports as WeeklyReport[])
+    if (s.attendance) setAttendance(s.attendance as AttendanceRecord[])
+    if (s.milestones) setMilestones(s.milestones as Milestone[])
+    if (s.feedback) setFeedback(s.feedback as CompanyFeedback[])
+    if (s.selfPlacements) setSelfPlacements(s.selfPlacements as SelfPlacement[])
+    if (s.achievements) setAchievements(s.achievements as Achievement[])
+    if (s.threads) setThreads(s.threads as Thread[])
+    if (s.messages) setMessages(s.messages as Message[])
+    if (s.notifications) setNotifications(s.notifications as Notification[])
+    if (s.audit) setAudit(s.audit as AuditEntry[])
+    if (typeof s.uid === 'number') uidCounter = Math.max(uidCounter, s.uid)
+  }, [])
+
+  // 1. Initial hydration: localStorage for 0ms startup, then fetch from Supabase
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SNAPSHOT_KEY) || sessionStorage.getItem(SNAPSHOT_KEY)
@@ -238,65 +262,103 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         if (s.role) setRole(s.role as Role)
         if (s.actingStudentId) setActingStudentId(s.actingStudentId as string)
         if (s.actingCompanyId) setActingCompanyId(s.actingCompanyId as string)
-        if (s.students) setStudents(s.students as Student[])
-        if (s.companies) setCompanies(s.companies as Company[])
-        if (s.faculty) setFacultyList(s.faculty as Faculty[])
-        if (s.drives) setDrives(s.drives as Drive[])
-        if (s.applications) setApplications(s.applications as Application[])
-        if (s.interviews) setInterviews(s.interviews as Interview[])
-        if (s.internships) setInternships(s.internships as Internship[])
-        if (s.documents) setDocuments(s.documents as InternshipDocument[])
-        if (s.weeklyReports) setWeeklyReports(s.weeklyReports as WeeklyReport[])
-        if (s.attendance) setAttendance(s.attendance as AttendanceRecord[])
-        if (s.milestones) setMilestones(s.milestones as Milestone[])
-        if (s.feedback) setFeedback(s.feedback as CompanyFeedback[])
-        if (s.selfPlacements) setSelfPlacements(s.selfPlacements as SelfPlacement[])
-        if (s.achievements) setAchievements(s.achievements as Achievement[])
-        if (s.threads) setThreads(s.threads as Thread[])
-        if (s.messages) setMessages(s.messages as Message[])
-        if (s.notifications) setNotifications(s.notifications as Notification[])
-        if (s.audit) setAudit(s.audit as AuditEntry[])
-        if (typeof s.uid === 'number') uidCounter = Math.max(uidCounter, s.uid)
+        applyRemoteState(s)
       }
     } catch {
       // ignore corrupt snapshots and fall back to seed data
     }
     setHydrated(true)
-  }, [])
 
+    // 2. Fetch latest shared state from Supabase Cloud
+    const fetchCloud = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('portal_data')
+          .select('state')
+          .eq('id', 'main_v1')
+          .single()
+
+        if (!error && data?.state) {
+          applyRemoteState(data.state as Record<string, unknown>)
+        }
+      } catch {
+        // fallback seamlessly to local snapshot
+      }
+    }
+    fetchCloud()
+
+    // 3. Subscribe to Realtime cloud updates across devices
+    const channel = supabase
+      .channel('portal-sync-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'portal_data', filter: 'id=eq.main_v1' },
+        (payload) => {
+          if (payload.new && (payload.new as { state?: Record<string, unknown> }).state) {
+            applyRemoteState((payload.new as { state: Record<string, unknown> }).state)
+          }
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [applyRemoteState])
+
+  // 4. Save to localStorage + Sync to Supabase Cloud on any change
   useEffect(() => {
     if (!hydrated) return
+    const snapshotObj = {
+      students,
+      companies,
+      faculty: facultyList,
+      drives,
+      applications,
+      interviews,
+      internships,
+      documents,
+      weeklyReports,
+      attendance,
+      milestones,
+      feedback,
+      selfPlacements,
+      achievements,
+      threads,
+      messages,
+      notifications,
+      audit,
+      uid: uidCounter,
+    }
+
     try {
-      const snapshot = JSON.stringify({
+      const localSnapshot = JSON.stringify({
         authSession,
         role,
         actingStudentId,
         actingCompanyId,
-        students,
-        companies,
-        faculty: facultyList,
-        drives,
-        applications,
-        interviews,
-        internships,
-        documents,
-        weeklyReports,
-        attendance,
-        milestones,
-        feedback,
-        selfPlacements,
-        achievements,
-        threads,
-        messages,
-        notifications,
-        audit,
-        uid: uidCounter,
+        ...snapshotObj,
       })
-      localStorage.setItem(SNAPSHOT_KEY, snapshot)
-      sessionStorage.setItem(SNAPSHOT_KEY, snapshot)
+      localStorage.setItem(SNAPSHOT_KEY, localSnapshot)
+      sessionStorage.setItem(SNAPSHOT_KEY, localSnapshot)
     } catch {
-      // storage may be unavailable; the portal still works in memory
+      // local storage unavailable
     }
+
+    // Debounced upload to Supabase cloud
+    const timer = setTimeout(async () => {
+      try {
+        await supabase.from('portal_data').upsert({
+          id: 'main_v1',
+          state: snapshotObj,
+          updated_at: new Date().toISOString(),
+        })
+      } catch {
+        // silent fallback if offline
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
   }, [
     hydrated,
     authSession,
