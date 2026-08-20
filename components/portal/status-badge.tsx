@@ -9,6 +9,7 @@ const styleFor = (status: string) => {
     case 'selected':
     case 'verified':
     case 'completed':
+    case 'fulfilled':
     case 'faculty_reviewed':
     case 'open':
     case 'active':
@@ -33,6 +34,8 @@ const styleFor = (status: string) => {
     case 'applied':
     case 'submitted':
       return 'bg-background text-muted-foreground border-dashed border-muted-foreground'
+    case 'expired':
+      return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
     case 'rejected':
     case 'blocked':
     case 'flagged':

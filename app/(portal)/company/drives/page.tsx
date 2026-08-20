@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Table,
   TableBody,
@@ -33,6 +34,7 @@ import {
 import { PageHeader, StatCard } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
 import { usePortal } from '@/lib/store'
+import { getDriveStatus } from '@/lib/eligibility'
 import type { Drive } from '@/lib/types'
 import { toast } from 'sonner'
 
@@ -44,6 +46,25 @@ export default function CompanyDrivesPage() {
     (d) => d.companyId === currentCompanyId || (!p.authSession?.userId && d.companyId === 'c1'),
   )
   const appsFor = (driveId: string) => p.applications.filter((a) => a.driveId === driveId)
+  const [tab, setTab] = useState('all')
+
+  const drivesWithStatus = myDrives.map((d) => ({
+    ...d,
+    lifecycleStatus: getDriveStatus(d, p.applications),
+  }))
+
+  const openDrives = drivesWithStatus.filter((d) => d.lifecycleStatus === 'open')
+  const expiredDrives = drivesWithStatus.filter((d) => d.lifecycleStatus === 'expired')
+  const completedDrives = drivesWithStatus.filter((d) => d.lifecycleStatus === 'completed' || d.lifecycleStatus === 'fulfilled')
+  const closedDrives = drivesWithStatus.filter((d) => d.lifecycleStatus === 'closed')
+
+  const visibleDrives = drivesWithStatus.filter((d) => {
+    if (tab === 'open') return d.lifecycleStatus === 'open'
+    if (tab === 'expired') return d.lifecycleStatus === 'expired'
+    if (tab === 'completed') return d.lifecycleStatus === 'completed' || d.lifecycleStatus === 'fulfilled'
+    if (tab === 'closed') return d.lifecycleStatus === 'closed'
+    return true
+  })
 
   // Edit Modal State
   const [editingDrive, setEditingDrive] = useState<Drive | null>(null)
@@ -170,109 +191,119 @@ export default function CompanyDrivesPage() {
         </div>
       )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Total drives" value={myDrives.length} />
-        <StatCard label="Open drives" value={myDrives.filter((d) => d.status === 'open').length} />
+        <StatCard label="Active / Open" value={openDrives.length} sub="accepting applications" />
+        <StatCard label="Expired drives" value={expiredDrives.length} sub="deadline passed" />
+        <StatCard label="Completed / Fulfilled" value={completedDrives.length} sub="positions filled" />
         <StatCard
           label="Total applicants"
           value={myDrives.reduce((n, d) => n + appsFor(d.id).length, 0)}
-        />
-        <StatCard
-          label="Selections"
-          value={myDrives.reduce(
-            (n, d) => n + appsFor(d.id).filter((a) => a.status === 'selected').length,
-            0,
-          )}
+          sub={`${myDrives.length} total drives`}
         />
       </div>
 
-      <div className="overflow-x-auto rounded-lg border bg-card shadow-xs">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Drive</TableHead>
-              <TableHead>Filters &amp; Criteria</TableHead>
-              <TableHead className="text-right">Stipend</TableHead>
-              <TableHead className="text-right">Openings</TableHead>
-              <TableHead className="text-right">Applicants</TableHead>
-              <TableHead>Deadline</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {myDrives.map((d) => {
-              const apps = appsFor(d.id)
-              return (
-                <TableRow key={d.id}>
-                  <TableCell>
-                    <Link
-                      href={`/drives/${d.id}`}
-                      className="font-medium underline-offset-4 hover:underline text-sm"
-                    >
-                      {d.title}
-                    </Link>
-                    <p className="text-xs text-muted-foreground">
-                      {d.location} · {d.workMode} · {d.durationWeeks} wks
-                    </p>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {d.anyoneCanApply
-                      ? 'Anyone can apply'
-                      : `CGPA ≥ ${d.minCgpa.toFixed(1)} · ${d.fieldFilter || d.field} · ${d.locationFilter || d.location}`}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-xs font-medium">
-                    ₹{d.stipend.toLocaleString('en-IN')}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-xs">{d.openings}</TableCell>
-                  <TableCell className="text-right tabular-nums text-xs font-semibold">{apps.length}</TableCell>
-                  <TableCell className="tabular-nums text-xs text-muted-foreground">{d.deadline}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={d.status} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs"
-                        render={<Link href={`/drives/${d.id}`} />}
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4 sm:w-auto sm:inline-flex">
+          <TabsTrigger value="all">All Drives ({myDrives.length})</TabsTrigger>
+          <TabsTrigger value="open">Active / Open ({openDrives.length})</TabsTrigger>
+          <TabsTrigger value="expired">Expired ({expiredDrives.length})</TabsTrigger>
+          <TabsTrigger value="completed">Completed ({completedDrives.length})</TabsTrigger>
+        </TabsList>
+
+        <div className="overflow-x-auto rounded-lg border bg-card shadow-xs">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Drive</TableHead>
+                <TableHead>Filters &amp; Criteria</TableHead>
+                <TableHead className="text-right">Stipend</TableHead>
+                <TableHead className="text-right">Openings</TableHead>
+                <TableHead className="text-right">Applicants</TableHead>
+                <TableHead>Deadline</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleDrives.map((d) => {
+                const apps = appsFor(d.id)
+                return (
+                  <TableRow key={d.id}>
+                    <TableCell>
+                      <Link
+                        href={`/drives/${d.id}`}
+                        className="font-medium underline-offset-4 hover:underline text-sm"
                       >
-                        <Eye className="size-3.5" />
-                        <span className="sr-only sm:not-sr-only sm:ml-1">View</span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2 text-xs gap-1"
-                        onClick={() => openEditModal(d)}
-                      >
-                        <Edit3 className="size-3.5" />
-                        <span className="sr-only sm:not-sr-only">Edit</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setDeletingDrive(d)}
-                      >
-                        <Trash2 className="size-3.5" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </div>
+                        {d.title}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">
+                        {d.location} · {d.workMode} · {d.durationWeeks} wks
+                      </p>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {d.anyoneCanApply
+                        ? 'Anyone can apply'
+                        : `CGPA ≥ ${d.minCgpa.toFixed(1)} · ${d.fieldFilter || d.field} · ${d.locationFilter || d.location}`}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-xs font-medium">
+                      ₹{d.stipend.toLocaleString('en-IN')}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-xs">{d.openings}</TableCell>
+                    <TableCell className="text-right tabular-nums text-xs font-semibold">{apps.length}</TableCell>
+                    <TableCell className="tabular-nums text-xs text-muted-foreground">{d.deadline}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={d.lifecycleStatus} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs"
+                          render={<Link href={`/drives/${d.id}`} />}
+                        >
+                          <Eye className="size-3.5" />
+                          <span className="sr-only sm:not-sr-only sm:ml-1">View</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2 text-xs gap-1"
+                          onClick={() => openEditModal(d)}
+                        >
+                          <Edit3 className="size-3.5" />
+                          <span className="sr-only sm:not-sr-only">Edit</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setDeletingDrive(d)}
+                        >
+                          <Trash2 className="size-3.5" />
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+              {visibleDrives.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
+                    {tab === 'expired'
+                      ? 'No expired drives found.'
+                      : tab === 'completed'
+                        ? 'No completed or fulfilled drives yet.'
+                        : tab === 'open'
+                          ? 'No active/open drives at the moment.'
+                          : 'No drives published yet. Click "Create drive" to hire interns.'}
                   </TableCell>
                 </TableRow>
-              )
-            })}
-            {myDrives.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
-                  No drives published yet. Click &quot;Create drive&quot; to hire interns.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </Tabs>
 
       {/* Edit Drive Dialog */}
       <Dialog open={Boolean(editingDrive)} onOpenChange={(open) => !open && setEditingDrive(null)}>

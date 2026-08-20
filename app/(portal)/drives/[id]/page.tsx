@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select'
 import { PageHeader } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
-import { checkEligibility } from '@/lib/eligibility'
+import { checkEligibility, getDriveStatus } from '@/lib/eligibility'
 import { usePortal } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import type { Drive } from '@/lib/types'
@@ -83,6 +83,7 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
     )
   }
 
+  const lifecycleStatus = getDriveStatus(drive, p.applications)
   const company = p.companies.find((c) => c.id === drive.companyId)
   const isOwner = (p.role === 'company' && drive.companyId === currentCompanyId) || p.role === 'admin'
   const backHref = p.role === 'company' ? '/company/drives' : '/drives'
@@ -91,7 +92,7 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
   const existingApp = me
     ? p.applications.find((a) => a.driveId === drive.id && a.studentId === me.id)
     : null
-  const canApply = elig?.state === 'eligible' && !existingApp && drive.status === 'open'
+  const canApply = elig?.state === 'eligible' && !existingApp && lifecycleStatus === 'open'
 
   const openEditModal = () => {
     setEditTitle(drive.title)
@@ -170,7 +171,7 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
         description={`${company?.name} · ${drive.field}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={drive.status} />
+            <StatusBadge status={lifecycleStatus} />
             {isOwner && (
               <>
                 <Button variant="outline" size="sm" onClick={openEditModal} className="gap-1.5 text-xs">
@@ -199,7 +200,11 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
                   </Button>
                 ) : (
                   <Button disabled={!canApply} onClick={() => p.applyToDrive(drive.id)}>
-                    Apply now
+                    {lifecycleStatus === 'expired'
+                      ? 'Deadline Passed'
+                      : lifecycleStatus === 'completed' || lifecycleStatus === 'fulfilled'
+                        ? 'Positions Filled'
+                        : 'Apply now'}
                   </Button>
                 )}
               </>
@@ -207,6 +212,24 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         }
       />
+
+      {lifecycleStatus === 'expired' && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300">
+          <p className="font-semibold">Application Deadline Passed ({drive.deadline})</p>
+          <p className="text-xs text-amber-700/80 dark:text-amber-300/80 mt-0.5">
+            This internship drive is closed for new applications. Students who already applied can track their interview and selection status in their applications ledger.
+          </p>
+        </div>
+      )}
+
+      {(lifecycleStatus === 'completed' || lifecycleStatus === 'fulfilled') && (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
+          <p className="font-semibold">Internship Drive Fulfilled &amp; Completed</p>
+          <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">
+            All {drive.openings} available position(s) have been filled for this hiring cycle.
+          </p>
+        </div>
+      )}
 
       {elig && (
         <div

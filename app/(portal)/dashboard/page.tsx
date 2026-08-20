@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { PageHeader, StatCard } from '@/components/portal/page-header'
 import { AiRecommendationWidget } from '@/components/portal/ai-copilot'
 import { StatusBadge } from '@/components/portal/status-badge'
-import { checkEligibility } from '@/lib/eligibility'
+import { checkEligibility, getDriveStatus } from '@/lib/eligibility'
 import { usePortal } from '@/lib/store'
 import { FileText, CheckCircle2, AlertCircle, ArrowRight, User } from 'lucide-react'
 
@@ -18,7 +18,7 @@ function StudentDashboard() {
   const myInternships = p.internships.filter((n) => n.studentId === me.id)
   const active = myInternships.find((n) => n.status === 'active')
   const eligibleCount = p.drives.filter(
-    (d) => d.status === 'open' && checkEligibility(me, d).state === 'eligible',
+    (d) => getDriveStatus(d, p.applications) === 'open' && checkEligibility(me, d).state === 'eligible',
   ).length
   const myInterviews = p.interviews.filter((i) =>
     myApps.some((a) => a.id === i.applicationId && a.status === 'interview_scheduled'),
@@ -213,7 +213,7 @@ function CompanyDashboard() {
         </div>
       )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Open drives" value={myDrives.filter((d) => d.status === 'open').length} />
+        <StatCard label="Open drives" value={myDrives.filter((d) => getDriveStatus(d, p.applications) === 'open').length} />
         <StatCard label="Total applicants" value={myApps.length} />
         <StatCard label="Shortlisted" value={myApps.filter((a) => a.status === 'shortlisted').length} />
         <StatCard label="Active interns" value={interns.length} />

@@ -176,6 +176,33 @@ export function isoDate(offsetDays = 0) {
   return d.toISOString().slice(0, 10)
 }
 
+export type DriveLifecycleStatus = 'open' | 'expired' | 'completed' | 'fulfilled' | 'closed'
+
+export function getDriveStatus(
+  drive: Drive,
+  applications?: Application[],
+  currentDateStr: string = new Date().toISOString().slice(0, 10),
+): DriveLifecycleStatus {
+  if (drive.status === 'closed') return 'closed'
+  if (drive.status === 'completed') return 'completed'
+
+  const selections = applications
+    ? applications.filter(
+        (a) => a.driveId === drive.id && (a.status === 'selected' || a.status === 'offered' || a.status === 'accepted'),
+      ).length
+    : 0
+
+  if (drive.openings > 0 && selections >= drive.openings) {
+    return 'completed'
+  }
+
+  if (drive.deadline && drive.deadline < currentDateStr) {
+    return 'expired'
+  }
+
+  return 'open'
+}
+
 export const statusLabel: Record<string, string> = {
   applied: 'Applied',
   under_review: 'Under Review',
@@ -193,8 +220,10 @@ export const statusLabel: Record<string, string> = {
   flagged: 'Flagged',
   open: 'Open',
   closed: 'Closed',
-  active: 'Active',
+  expired: 'Expired',
   completed: 'Completed',
+  fulfilled: 'Fulfilled',
+  active: 'Active',
   in_progress: 'In Progress',
   not_uploaded: 'Not Uploaded',
   uploaded: 'Uploaded',
