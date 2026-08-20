@@ -972,15 +972,16 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const sendMessage: PortalState['sendMessage'] = (threadId, body, attachmentName) => {
+    const currentUserId = authSession?.userId || (role === 'student' ? actingStudentId : role === 'company' ? actingCompanyId : role === 'faculty' ? actingFacultyId : 'admin1')
     const names: Record<Role, string> = {
-      student: students.find((s) => s.id === actingStudentId)?.name ?? 'Student',
-      company: companies.find((c) => c.id === actingCompanyId)?.name ?? 'Company',
-      faculty: 'Prof. R. Kulkarni',
+      student: students.find((s) => s.id === currentUserId)?.name ?? authSession?.name ?? 'Student',
+      company: companies.find((c) => c.id === currentUserId)?.name ?? authSession?.name ?? 'Company',
+      faculty: facultyList.find((f) => f.id === currentUserId)?.name ?? 'Prof. R. Kulkarni',
       admin: 'T&P Cell',
     }
     setMessages((prev) => [
       ...prev,
-      { id: uid('msg'), threadId, fromRole: role, fromName: names[role], body, at: today(), attachmentName },
+      { id: uid('msg'), threadId, fromRole: role, fromUserId: currentUserId, fromName: names[role], body, at: today(), attachmentName },
     ])
     setThreads((prev) =>
       prev.map((t) =>
@@ -989,26 +990,51 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
           : t,
       ),
     )
-    toast.success('Message sent', { description: 'Email notification delivered to the recipient.' })
+    toast.success('Message sent', { description: 'Notification delivered to the recipient.' })
   }
 
-  const createThread: PortalState['createThread'] = (subject, toRole, body) => {
-    const names: Record<Role, string> = {
-      student: students.find((s) => s.id === actingStudentId)?.name ?? 'Student',
-      company: companies.find((c) => c.id === actingCompanyId)?.name ?? 'Company',
-      faculty: 'Prof. R. Kulkarni',
-      admin: 'T&P Cell',
+  const createThread: PortalState['createThread'] = (subject, toRole, body, targetId) => {
+    const currentUserId = authSession?.userId || (role === 'student' ? actingStudentId : role === 'company' ? actingCompanyId : role === 'faculty' ? actingFacultyId : 'admin1')
+    const targetRecipientId = targetId || (toRole === 'admin' ? 'admin1' : toRole === 'faculty' ? actingFacultyId : undefined)
+    
+    let targetName = 'T&P Cell'
+    if (toRole === 'faculty') {
+      targetName = facultyList.find((f) => f.id === targetRecipientId)?.name ?? 'Faculty Mentor'
+    } else if (toRole === 'company') {
+      targetName = companies.find((c) => c.id === targetRecipientId)?.name ?? 'Hiring Partner'
+    } else if (toRole === 'student') {
+      targetName = students.find((s) => s.id === targetRecipientId)?.name ?? 'Student'
     }
+
+    const myName =
+      role === 'student'
+        ? students.find((s) => s.id === currentUserId)?.name ?? authSession?.name ?? 'Student'
+        : role === 'company'
+          ? companies.find((c) => c.id === currentUserId)?.name ?? authSession?.name ?? 'Company'
+          : role === 'faculty'
+            ? facultyList.find((f) => f.id === currentUserId)?.name ?? 'Faculty Mentor'
+            : 'T&P Cell'
+
     const threadId = uid('t')
+    const participantIds = [currentUserId]
+    if (targetRecipientId) participantIds.push(targetRecipientId)
+
     setThreads((prev) => [
-      { id: threadId, subject, participants: [role, toRole], participantNames: `${names[role]} ↔ ${names[toRole]}`, unreadFor: [toRole] },
+      {
+        id: threadId,
+        subject,
+        participants: [role, toRole],
+        participantIds,
+        participantNames: `${myName} ↔ ${targetName}`,
+        unreadFor: [toRole],
+      },
       ...prev,
     ])
     setMessages((prev) => [
       ...prev,
-      { id: uid('msg'), threadId, fromRole: role, fromName: names[role], body, at: today() },
+      { id: uid('msg'), threadId, fromRole: role, fromUserId: currentUserId, fromName: myName, body, at: today() },
     ])
-    toast.success('Message sent', { description: `Email notification delivered to ${names[toRole]}.` })
+    toast.success('Message sent', { description: `Notification delivered to ${targetName}.` })
   }
 
   const markThreadRead: PortalState['markThreadRead'] = (threadId) => {

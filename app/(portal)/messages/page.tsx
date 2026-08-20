@@ -43,10 +43,25 @@ const RECIPIENTS: Record<Role, Role[]> = {
 
 export default function MessagesPage() {
   const p = usePortal()
-  const myThreads = useMemo(
-    () => p.threads.filter((t) => t.participants.includes(p.role)),
-    [p.threads, p.role],
-  )
+  const currentUserId =
+    p.authSession?.userId ||
+    (p.role === 'student'
+      ? p.actingStudentId
+      : p.role === 'company'
+        ? p.actingCompanyId
+        : p.role === 'faculty'
+          ? p.actingFacultyId
+          : 'admin1')
+
+  const myThreads = useMemo(() => {
+    return p.threads.filter((t) => {
+      if (p.role === 'admin') return true
+      if (t.participantIds && t.participantIds.length > 0) {
+        return t.participantIds.includes(currentUserId)
+      }
+      return t.participants.includes(p.role)
+    })
+  }, [p.threads, p.role, currentUserId])
 
   const [tab, setTab] = useState('inbox')
   const [query, setQuery] = useState('')
@@ -56,6 +71,7 @@ export default function MessagesPage() {
   const [composeOpen, setComposeOpen] = useState(false)
   const [subject, setSubject] = useState('')
   const [toRole, setToRole] = useState<Role>(RECIPIENTS[p.role][0])
+  const [targetRecipientId, setTargetRecipientId] = useState<string>('')
   const [body, setBody] = useState('')
 
   const visible = myThreads.filter((t) => {
@@ -267,8 +283,15 @@ export default function MessagesPage() {
           </DialogHeader>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="to">To</Label>
-              <Select value={toRole} onValueChange={(v) => setToRole(v as Role)}>
+              <Label htmlFor="to">Recipient Role</Label>
+              <Select
+                value={toRole}
+                onValueChange={(v) => {
+                  const r = v as Role
+                  setToRole(r)
+                  setTargetRecipientId('')
+                }}
+              >
                 <SelectTrigger id="to">
                   <SelectValue />
                 </SelectTrigger>
@@ -281,6 +304,61 @@ export default function MessagesPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {toRole === 'faculty' && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="to-faculty">Select Faculty Mentor</Label>
+                <Select value={targetRecipientId} onValueChange={setTargetRecipientId}>
+                  <SelectTrigger id="to-faculty">
+                    <SelectValue placeholder="Choose faculty mentor..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {p.faculty.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name} ({f.department})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {toRole === 'company' && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="to-company">Select Company Partner</Label>
+                <Select value={targetRecipientId} onValueChange={setTargetRecipientId}>
+                  <SelectTrigger id="to-company">
+                    <SelectValue placeholder="Choose company..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {p.companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.industry})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {toRole === 'student' && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="to-student">Select Student</Label>
+                <Select value={targetRecipientId} onValueChange={setTargetRecipientId}>
+                  <SelectTrigger id="to-student">
+                    <SelectValue placeholder="Choose student..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {p.students.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name} ({s.enrollment} · {s.branch})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="flex flex-col gap-2">
               <Label htmlFor="subject">Subject</Label>
               <Input
@@ -308,10 +386,11 @@ export default function MessagesPage() {
             <Button
               onClick={() => {
                 if (!subject.trim() || !body.trim()) return
-                p.createThread(subject.trim(), toRole, body.trim())
+                p.createThread(subject.trim(), toRole, body.trim(), targetRecipientId || undefined)
                 setComposeOpen(false)
                 setSubject('')
                 setBody('')
+                setTargetRecipientId('')
               }}
             >
               Send message

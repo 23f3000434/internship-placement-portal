@@ -251,6 +251,7 @@ export interface Message {
   threadId: string
   fromRole: Role
   fromName: string
+  fromUserId?: string
   body: string
   at: string
   system?: boolean
@@ -261,6 +262,7 @@ export interface Thread {
   id: string
   subject: string
   participants: Role[]
+  participantIds?: string[]
   participantNames: string
   unreadFor: Role[]
 }
