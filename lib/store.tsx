@@ -517,6 +517,19 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     try {
       broadcastRef.current?.postMessage(payload)
     } catch {}
+
+    // Debounced cloud sync to Supabase (saves bandwidth & stays well within API quotas)
+    if (typeof window !== 'undefined') {
+      const win = window as unknown as { _cloudSyncTimer?: ReturnType<typeof setTimeout> }
+      if (win._cloudSyncTimer) clearTimeout(win._cloudSyncTimer)
+      win._cloudSyncTimer = setTimeout(() => {
+        fetch('/api/portal/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => {})
+      }, 1200)
+    }
   }, [
     students,
     companies,
