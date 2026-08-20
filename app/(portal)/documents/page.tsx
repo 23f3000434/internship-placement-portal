@@ -371,6 +371,7 @@ export default function DocumentsPage() {
           onOpenChange={(open) => !open && setViewDoc(null)}
           doc={viewDoc}
           internship={internships.find((n) => n.id === viewDoc.internshipId)}
+          student={student}
         />
       )}
     </>

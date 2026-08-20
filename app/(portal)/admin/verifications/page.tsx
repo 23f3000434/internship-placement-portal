@@ -318,6 +318,7 @@ export default function VerificationsPage() {
           open={Boolean(viewDoc)}
           onOpenChange={(open) => !open && setViewDoc(null)}
           doc={viewDoc}
+          student={p.students.find((s) => viewDoc.id.includes(s.id)) || p.students[0]}
         />
       )}
     </>

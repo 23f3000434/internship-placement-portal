@@ -34,9 +34,9 @@ interface DocumentViewerModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   doc: InternshipDocument
-  internship: Internship
-  student?: Student
-  company?: Company
+  internship?: Internship | null
+  student?: Student | null
+  company?: Company | null
 }
 
 export function DocumentViewerModal({
@@ -51,15 +51,31 @@ export function DocumentViewerModal({
   const [rejectReason, setRejectReason] = useState('')
   const [isRejecting, setIsRejecting] = useState(false)
 
-  const s = student || p.students.find((x) => x.id === internship.studentId)
+  // Safe fallback resolution for student, company, and internship
+  const s =
+    student ||
+    (internship ? p.students.find((x) => x.id === internship.studentId) : null) ||
+    p.students.find((x) => x.id === p.actingStudentId) ||
+    p.students[0]
+
   const c =
     company ||
-    (internship.companyId === 'self'
+    (internship && internship.companyId !== 'self' ? p.companies.find((x) => x.id === internship.companyId) : null) ||
+    (internship?.companyId === 'self'
       ? { name: 'Self-Placed Approved Organization', location: internship.location || 'Approved' }
-      : p.companies.find((x) => x.id === internship.companyId))
+      : { name: 'Central Placement & Academic Verification Cell', location: 'College Campus' })
 
-  const label = documentLabel[doc.kind]
-  const verifyCode = doc.verifyCode || `ITK-${internship.id.toUpperCase()}-${doc.kind.slice(0, 3).toUpperCase()}-9901`
+  const label = documentLabel[doc.kind] || doc.fileName || 'Placement Document'
+  const verifyCode =
+    doc.verifyCode ||
+    (internship
+      ? `ITK-${internship.id.toUpperCase()}-${doc.kind.slice(0, 3).toUpperCase()}-9901`
+      : `DOC-${(doc.id || 'REF').toUpperCase()}-VERIFIED`)
+
+  const roleName = internship?.role || 'Internship / Academic Credential Record'
+  const tenureStr = internship?.startDate
+    ? `${internship.startDate} → ${internship.endDate}`
+    : 'Placement Cycle 2025–2026'
 
   const handleDownload = () => {
     if (doc.fileData && doc.fileData.startsWith('data:')) {
@@ -68,14 +84,14 @@ export function DocumentViewerModal({
       a.download = doc.fileName || `${label.toLowerCase().replace(/\s+/g, '-')}.pdf`
       a.click()
     } else {
-      // Create clean official text transcript
+      // Create clean official text transcript without Buffer (browser-safe)
       const content = `========================================================================
 G H RAISONI COLLEGE OF ENGINEERING & MANAGEMENT, JALGAON
 TRAINING & PLACEMENT CELL - OFFICIAL DOCUMENT RECORD
 ========================================================================
 Document: ${label.toUpperCase()}
 Verification Code: ${verifyCode}
-Status: ${doc.status.toUpperCase()}
+Status: ${(doc.status || 'verified').toUpperCase()}
 Date: ${doc.uploadedAt || new Date().toISOString().slice(0, 10)}
 
 STUDENT DETAILS:
@@ -85,19 +101,18 @@ Branch: ${s?.branch || 'Computer Science'}
 
 ORGANIZATION:
 Company: ${c?.name || 'Partner Company'}
-Role: ${internship.role}
-Tenure: ${internship.startDate} to ${internship.endDate}
+Role: ${roleName}
+Tenure: ${tenureStr}
 
-DIGITAL SIGNATURE:
-SHA256:${Buffer.from(verifyCode + '-VERIFIED-GHRCEM').toString('base64').slice(0, 28)}
+DIGITAL SIGNATURE & AUTHENTICITY:
+Public Verification Ref: ${verifyCode}
 Public Verification URL: https://internship-placement-portal.vercel.app/verify?code=${verifyCode}
 ========================================================================`
       const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      // Use .txt extension for plain text transcripts to prevent image viewer crashes
-      const baseName = (doc.fileName || `${doc.kind}-${internship.id}`).replace(/\.[^/.]+$/, '')
+      const baseName = (doc.fileName || `${doc.kind || 'doc'}-record`).replace(/\.[^/.]+$/, '')
       a.download = `${baseName}-record.txt`
       a.click()
       URL.revokeObjectURL(url)
@@ -126,7 +141,7 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
               <FileCheck className="size-5 text-foreground" />
               <DialogTitle className="text-lg">{label}</DialogTitle>
             </div>
-            <StatusBadge status={doc.status} />
+            <StatusBadge status={doc.status || 'uploaded'} />
           </div>
           <DialogDescription>
             {doc.fileName || `${label.toLowerCase()}.pdf`} · Uploaded by {doc.uploadedBy || 'student'} on{' '}
@@ -177,13 +192,11 @@ Public Verification URL: https://internship-placement-portal.vercel.app/verify?c
             </div>
             <div className="space-y-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                Host Organization
+                Host / Verification Organization
               </span>
               <p className="font-semibold text-foreground text-sm">{c?.name || 'TechNova Systems'}</p>
-              <p className="text-muted-foreground">Designation: {internship.role}</p>
-              <p className="text-muted-foreground">
-                Period: {internship.startDate} → {internship.endDate}
-              </p>
+              <p className="text-muted-foreground">Role: {roleName}</p>
+              <p className="text-muted-foreground">Period: {tenureStr}</p>
             </div>
           </div>
 

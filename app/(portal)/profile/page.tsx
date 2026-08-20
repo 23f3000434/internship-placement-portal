@@ -524,6 +524,7 @@ export default function ProfilePage() {
             uploadedAt: 'Current',
             status: 'verified',
           }}
+          student={student}
         />
       )}
     </>

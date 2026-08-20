@@ -300,16 +300,12 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
     setHydrated(true)
 
-    // 2. Fetch latest shared state from Supabase Cloud
+    // 2. Fetch latest shared state from REST API endpoint
     const fetchCloud = async () => {
       try {
-        const { data, error } = await supabase
-          .from('portal_data')
-          .select('state')
-          .eq('id', 'main_v1')
-          .single()
-
-        if (!error && data?.state) {
+        const res = await fetch('/api/portal/sync')
+        const data = await res.json()
+        if (data.synced && data.state) {
           applyRemoteState(data.state as Record<string, unknown>)
         }
       } catch {
@@ -318,7 +314,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
     fetchCloud()
 
-    // 3. Subscribe to Realtime cloud updates across devices
+    // 3. Regular background poll every 3 seconds for instant multi-device / incognito syncing
+    const pollInterval = setInterval(fetchCloud, 3000)
+
+    // 4. Subscribe to Realtime cloud updates
     const channel = supabase
       .channel('portal-sync-live')
       .on(
@@ -333,11 +332,12 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       .subscribe()
 
     return () => {
+      clearInterval(pollInterval)
       supabase.removeChannel(channel)
     }
   }, [applyRemoteState])
 
-  // 4. Save to localStorage + Sync to Supabase Cloud on any change
+  // 5. Save to localStorage (quota-safe) + Sync to Supabase Cloud on any change
   useEffect(() => {
     if (!hydrated) return
     const snapshotObj = {
@@ -363,17 +363,26 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const localSnapshot = JSON.stringify({
-        authSession,
-        role,
-        actingStudentId,
-        actingCompanyId,
-        ...snapshotObj,
-      })
+      // Sanitize oversized base64 files for localStorage to never exceed browser 5MB quota
+      const localSnapshot = JSON.stringify(
+        {
+          authSession,
+          role,
+          actingStudentId,
+          actingCompanyId,
+          ...snapshotObj,
+        },
+        (key, value) => {
+          if (typeof value === 'string' && value.startsWith('data:') && value.length > 25000) {
+            return value.slice(0, 500) + '...[offline_cached]'
+          }
+          return value
+        },
+      )
       localStorage.setItem(SNAPSHOT_KEY, localSnapshot)
       sessionStorage.setItem(SNAPSHOT_KEY, localSnapshot)
     } catch {
-      // local storage unavailable
+      // local storage quota or unavailable fallback
     }
 
     // Debounced upload to Supabase cloud
