@@ -585,11 +585,54 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: 'Please enter your password.' }
     }
 
+    const persistSession = (sess: AuthSession | null, targetRole: Role, extra?: Record<string, unknown>) => {
+      try {
+        const raw = localStorage.getItem(SNAPSHOT_KEY) || sessionStorage.getItem(SNAPSHOT_KEY)
+        let stateObj: Record<string, unknown> = {
+          students,
+          companies,
+          faculty: facultyList,
+          drives,
+          applications,
+          interviews,
+          internships,
+          documents,
+          weeklyReports,
+          attendance,
+          milestones,
+          feedback,
+          selfPlacements,
+          achievements,
+          threads,
+          messages,
+          notifications,
+          audit,
+          uid: uidCounter,
+        }
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw)
+            if (parsed && typeof parsed === 'object') {
+              stateObj = { ...stateObj, ...parsed }
+            }
+          } catch {}
+        }
+        const updated = JSON.stringify({
+          ...stateObj,
+          authSession: sess,
+          role: targetRole,
+          ...extra,
+        })
+        localStorage.setItem(SNAPSHOT_KEY, updated)
+        sessionStorage.setItem(SNAPSHOT_KEY, updated)
+      } catch {}
+    }
+
     const matchUser = (
       currentStudents: Student[],
       currentCompanies: Company[],
       currentFaculty: Faculty[],
-    ) => {
+    ): { success: boolean; error?: string } | null => {
       // 1. Check Admin
       if (cleanEmail === 'admin@college.edu' || cleanEmail === 'tnp@college.edu') {
         if (cleanPass !== 'admin123' && cleanPass !== 'password123' && cleanPass !== 'admin') {
@@ -605,9 +648,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         }
         setAuthSession(sess)
         setRole('admin')
-        try {
-          localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ authSession: sess, role: 'admin' }))
-        } catch {}
+        persistSession(sess, 'admin')
         toast.success('Signed in as Admin / T&P Cell')
         return { success: true }
       }
@@ -630,9 +671,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         setAuthSession(sess)
         setRole('faculty')
         setActingFacultyId(fMatch.id)
-        try {
-          localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ authSession: sess, role: 'faculty', actingFacultyId: fMatch.id }))
-        } catch {}
+        persistSession(sess, 'faculty', { actingFacultyId: fMatch.id })
         toast.success(`Signed in as ${fMatch.name}`)
         return { success: true }
       }
@@ -655,9 +694,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         setAuthSession(sess)
         setRole('student')
         setActingStudentId(sMatch.id)
-        try {
-          localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ authSession: sess, role: 'student', actingStudentId: sMatch.id }))
-        } catch {}
+        persistSession(sess, 'student', { actingStudentId: sMatch.id })
         toast.success(`Signed in as ${sMatch.name}`)
         return { success: true }
       }
@@ -687,9 +724,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         setAuthSession(sess)
         setRole('company')
         setActingCompanyId(cMatch.id)
-        try {
-          localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ authSession: sess, role: 'company', actingCompanyId: cMatch.id }))
-        } catch {}
+        persistSession(sess, 'company', { actingCompanyId: cMatch.id })
         toast.success(`Signed in as ${cMatch.name}`)
         return { success: true }
       }
@@ -757,9 +792,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       }
       setAuthSession(sess)
       setRole('admin')
+      persistSession(sess, 'admin')
       toast.success('Signed in as Admin / T&P Cell')
     } else if (targetRole === 'faculty') {
-      const f = faculty[0]
+      const f = facultyList[0]
       const sess: AuthSession = {
         userId: f.id,
         name: f.name,
@@ -770,6 +806,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       }
       setAuthSession(sess)
       setRole('faculty')
+      persistSession(sess, 'faculty', { actingFacultyId: f.id })
       toast.success(`Signed in as Faculty (${f.name})`)
     } else if (targetRole === 'company') {
       const targetC = companies.find((c) => c.id === (personaId || actingCompanyId)) || companies[0]
@@ -784,6 +821,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       setAuthSession(sess)
       setRole('company')
       setActingCompanyId(targetC.id)
+      persistSession(sess, 'company', { actingCompanyId: targetC.id })
       toast.success(`Signed in as Recruiter (${targetC.name})`)
     } else {
       const targetS = students.find((s) => s.id === (personaId || actingStudentId)) || students[0]
@@ -798,12 +836,14 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       setAuthSession(sess)
       setRole('student')
       setActingStudentId(targetS.id)
+      persistSession(sess, 'student', { actingStudentId: targetS.id })
       toast.success(`Signed in as Student (${targetS.name})`)
     }
   }
 
   const logout: PortalState['logout'] = () => {
     setAuthSession(null)
+    persistSession(null, 'student')
     toast.info('Signed out successfully')
   }
 

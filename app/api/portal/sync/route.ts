@@ -225,17 +225,79 @@ export async function POST(req: Request) {
       })
     }
 
-    // 3. Full Snapshot Upsert
-    if (Array.isArray(body.students)) {
-      body.students = dedupeStudents(body.students as Student[])
+    // 4. Non-destructive Snapshot Upsert with deep entity preservation
+    const { data: existingData } = await supabase.from('portal_data').select('state').eq('id', 'main_v1').single()
+    const currentState = (existingData?.state as Record<string, unknown>) || defaultState
+
+    const mergedStudents = dedupeStudents([
+      ...(Array.isArray(currentState.students) ? (currentState.students as Student[]) : seedStudents),
+      ...(Array.isArray(body.students) ? (body.students as Student[]) : []),
+    ])
+    const mergedCompanies = dedupeCompanies([
+      ...(Array.isArray(currentState.companies) ? (currentState.companies as Company[]) : seedCompanies),
+      ...(Array.isArray(body.companies) ? (body.companies as Company[]) : []),
+    ])
+
+    // Merge drives by ID
+    const driveMap = new Map<string, unknown>()
+    if (Array.isArray(currentState.drives)) {
+      for (const d of currentState.drives as Array<{ id: string }>) driveMap.set(d.id, d)
     }
-    if (Array.isArray(body.companies)) {
-      body.companies = dedupeCompanies(body.companies as Company[])
+    if (Array.isArray(body.drives)) {
+      for (const d of body.drives as Array<{ id: string }>) driveMap.set(d.id, d)
+    }
+
+    // Merge applications by ID
+    const appMap = new Map<string, unknown>()
+    if (Array.isArray(currentState.applications)) {
+      for (const a of currentState.applications as Array<{ id: string }>) appMap.set(a.id, a)
+    }
+    if (Array.isArray(body.applications)) {
+      for (const a of body.applications as Array<{ id: string }>) appMap.set(a.id, a)
+    }
+
+    // Merge interviews
+    const ivMap = new Map<string, unknown>()
+    if (Array.isArray(currentState.interviews)) {
+      for (const iv of currentState.interviews as Array<{ id: string }>) ivMap.set(iv.id, iv)
+    }
+    if (Array.isArray(body.interviews)) {
+      for (const iv of body.interviews as Array<{ id: string }>) ivMap.set(iv.id, iv)
+    }
+
+    // Merge internships
+    const internMap = new Map<string, unknown>()
+    if (Array.isArray(currentState.internships)) {
+      for (const intern of currentState.internships as Array<{ id: string }>) internMap.set(intern.id, intern)
+    }
+    if (Array.isArray(body.internships)) {
+      for (const intern of body.internships as Array<{ id: string }>) internMap.set(intern.id, intern)
+    }
+
+    // Merge weekly reports
+    const reportMap = new Map<string, unknown>()
+    if (Array.isArray(currentState.weeklyReports)) {
+      for (const r of currentState.weeklyReports as Array<{ id: string }>) reportMap.set(r.id, r)
+    }
+    if (Array.isArray(body.weeklyReports)) {
+      for (const r of body.weeklyReports as Array<{ id: string }>) reportMap.set(r.id, r)
+    }
+
+    const mergedState = {
+      ...currentState,
+      ...body,
+      students: mergedStudents,
+      companies: mergedCompanies,
+      drives: Array.from(driveMap.values()),
+      applications: Array.from(appMap.values()),
+      interviews: Array.from(ivMap.values()),
+      internships: Array.from(internMap.values()),
+      weeklyReports: Array.from(reportMap.values()),
     }
 
     const { error } = await supabase.from('portal_data').upsert({
       id: 'main_v1',
-      state: body,
+      state: mergedState,
       updated_at: new Date().toISOString(),
     })
 
@@ -243,7 +305,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ synced: false, error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ synced: true, timestamp: new Date().toISOString() })
+    return NextResponse.json({ synced: true, state: mergedState, timestamp: new Date().toISOString() })
   } catch {
     // Supabase unavailable — data is still saved locally in the browser
     return NextResponse.json({ synced: true, offline: true, timestamp: new Date().toISOString() })
