@@ -704,39 +704,48 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const registerStudent: PortalState['registerStudent'] = async (s) => {
-    const id = uid('s')
+    const email = s.email.trim().toLowerCase()
+    const phone = s.phone?.trim() ?? ''
+    if (!s.name.trim() || !email || !s.enrollment.trim() || !s.branch.trim() || !phone) {
+      throw new Error('Please complete every required field.')
+    }
+    if (!/^\+?[0-9][0-9\s-]{7,14}$/.test(phone)) throw new Error('Enter a valid phone number.')
+    if (!s.resumeUploaded || !s.resumeName || !s.resumeData?.startsWith('data:application/pdf')) {
+      throw new Error('A valid PDF resume is required.')
+    }
+    if (!s.idDocsUploaded || !s.idDocsName || !s.idDocsData?.startsWith('data:')) {
+      throw new Error('A valid identity document is required.')
+    }
+    if (students.some((student) => student.email.trim().toLowerCase() === email)) {
+      throw new Error('An account with this email already exists.')
+    }
+
     const cleanStudent: Student = {
       ...s,
-      id,
+      id: uid('s'),
       name: s.name.trim(),
-      email: s.email.trim().toLowerCase(),
-      password: (s.password || 'password123').trim(),
+      email,
+      enrollment: s.enrollment.trim(),
+      phone,
+      password: (s.password || '').trim(),
       status: 'pending',
       facultyId: 'f1',
     }
 
-    // 1. Deduplicate and update local state immediately
-    const nextStudents = dedupeStudents([
-      ...students.filter((st) => st.email.trim().toLowerCase() !== cleanStudent.email),
-      cleanStudent,
-    ])
-    setStudents(nextStudents)
-
-    // 2. Post atomic registration to server API
-    try {
-      const res = await fetch('/api/portal/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'register_student', student: cleanStudent }),
-      })
-      const data = await res.json()
-      if (data.students && Array.isArray(data.students)) {
-        setStudents(dedupeStudents(data.students as Student[]))
-      }
-    } catch (err) {
-      console.error('Registration server sync error:', err)
+    const res = await fetch('/api/portal/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'register_student', student: cleanStudent }),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !data?.synced) {
+      throw new Error(data?.error || 'Registration could not be saved. Please try again.')
     }
 
+    const nextStudents = Array.isArray(data.students)
+      ? dedupeStudents(data.students as Student[])
+      : dedupeStudents([...students, cleanStudent])
+    setStudents(nextStudents)
     notify('admin', 'New student registration', `${cleanStudent.name} submitted documents for verification.`)
     emailToast(cleanStudent.email, 'Registration received — pending verification')
   }
