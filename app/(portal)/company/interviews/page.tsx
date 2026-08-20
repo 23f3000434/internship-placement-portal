@@ -9,7 +9,8 @@ import { usePortal } from '@/lib/store'
 
 export default function CompanyInterviewsPage() {
   const p = usePortal()
-  const myDrives = p.drives.filter((d) => d.companyId === p.actingCompanyId)
+  const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
+  const myDrives = p.drives.filter((d) => d.companyId === currentCompanyId || (!p.authSession?.userId && d.companyId === 'c1'))
   const myApps = p.applications.filter((a) => myDrives.some((d) => d.id === a.driveId))
   const myInterviews = p.interviews
     .filter((i) => myApps.some((a) => a.id === i.applicationId))

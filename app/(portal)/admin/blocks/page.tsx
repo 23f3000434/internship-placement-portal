@@ -37,11 +37,14 @@ export default function BlocksPage() {
 
   const confirm = () => {
     if (!target) return
+    if (!target.blocked && !reason.trim()) {
+      return
+    }
     p.setBlocked(
       target.kind,
       target.id,
       !target.blocked,
-      target.blocked ? undefined : reason.trim() || 'Policy violation under review.',
+      target.blocked ? undefined : reason.trim(),
     )
     setTarget(null)
     setReason('')

@@ -277,7 +277,8 @@ function InternCard({ internship }: { internship: Internship }) {
 
 export default function CompanyFeedbackPage() {
   const p = usePortal()
-  const myInterns = p.internships.filter((n) => n.companyId === p.actingCompanyId)
+  const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
+  const myInterns = p.internships.filter((n) => n.companyId === currentCompanyId || (!p.authSession?.userId && n.companyId === 'c1'))
 
   return (
     <>

@@ -74,7 +74,11 @@ export default function VerificationsPage() {
 
   const confirmReject = () => {
     if (!rejectTarget) return
-    const r = reason.trim() || 'Documents did not pass verification.'
+    if (!reason.trim()) {
+      toast.error('Rejection Reason Required', { description: 'Please provide an explicit explanation for the rejection.' })
+      return
+    }
+    const r = reason.trim()
     if (rejectTarget.kind === 'student') p.verifyStudent(rejectTarget.id, false, r)
     else p.verifyCompany(rejectTarget.id, false, r)
     setRejectTarget(null)
@@ -287,7 +291,7 @@ export default function VerificationsPage() {
             <Button variant="outline" onClick={() => setRejectTarget(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmReject}>
+            <Button variant="destructive" disabled={!reason.trim()} onClick={confirmReject}>
               Confirm rejection
             </Button>
           </DialogFooter>

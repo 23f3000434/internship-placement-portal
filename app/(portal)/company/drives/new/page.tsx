@@ -26,7 +26,8 @@ const daysFromNow = (d: number) => {
 export default function NewDrivePage() {
   const p = usePortal()
   const router = useRouter()
-  const me = p.companies.find((c) => c.id === p.actingCompanyId)
+  const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
+  const me = p.companies.find((c) => c.id === currentCompanyId) || p.companies[0]
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')

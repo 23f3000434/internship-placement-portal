@@ -11,7 +11,8 @@ import { FileText, CheckCircle2, AlertCircle, ArrowRight, User } from 'lucide-re
 
 function StudentDashboard() {
   const p = usePortal()
-  const me = p.students.find((s) => s.id === p.actingStudentId)
+  const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
+  const me = p.students.find((s) => s.id === currentStudentId) || p.students[0]
   if (!me) return null
   const myApps = p.applications.filter((a) => a.studentId === me.id)
   const myInternships = p.internships.filter((n) => n.studentId === me.id)
@@ -172,9 +173,10 @@ function StudentDashboard() {
 
 function CompanyDashboard() {
   const p = usePortal()
-  const me = p.companies.find((c) => c.id === p.actingCompanyId)
+  const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
+  const me = p.companies.find((c) => c.id === currentCompanyId) || p.companies[0]
   if (!me) return null
-  const myDrives = p.drives.filter((d) => d.companyId === me.id)
+  const myDrives = p.drives.filter((d) => d.companyId === me.id || (!p.authSession?.userId && d.companyId === 'c1'))
   const myApps = p.applications.filter((a) => myDrives.some((d) => d.id === a.driveId))
   const interns = p.internships.filter((n) => n.companyId === me.id && n.status === 'active')
 
@@ -248,7 +250,8 @@ function CompanyDashboard() {
 
 function FacultyDashboard() {
   const p = usePortal()
-  const mentees = p.students.filter((s) => s.facultyId === p.actingFacultyId)
+  const currentFacultyId = p.authSession?.userId || p.actingFacultyId || 'f1'
+  const mentees = p.students.filter((s) => s.facultyId === currentFacultyId || (!p.authSession?.userId && s.facultyId === 'f1'))
   const pendingSP = p.selfPlacements.filter((sp) => sp.status === 'pending')
   const pendingAch = p.achievements.filter((a) => a.status === 'pending')
   const pendingReports = p.weeklyReports.filter((w) => w.status === 'company_approved')

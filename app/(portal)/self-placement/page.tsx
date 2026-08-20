@@ -10,6 +10,8 @@ import { PageHeader } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
 import { usePortal } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { validateUploadedFile } from '@/lib/file-validation'
+import { toast } from 'sonner'
 
 function UploadToggle({
   id,
@@ -26,9 +28,17 @@ function UploadToggle({
 }) {
   const [fileName, setFileName] = useState<string | null>(null)
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
+      const check = await validateUploadedFile(f, ['pdf', 'image'])
+      if (!check.valid) {
+        toast.error('File Upload Blocked', { description: check.error || 'Invalid file format or signature.' })
+        e.target.value = ''
+        setFileName(null)
+        onChange(false)
+        return
+      }
       setFileName(f.name)
       onChange(true)
     }
@@ -90,8 +100,9 @@ function UploadToggle({
 
 export default function SelfPlacementPage() {
   const p = usePortal()
-  const me = p.students.find((s) => s.id === p.actingStudentId)
-  const mine = p.selfPlacements.filter((sp) => sp.studentId === p.actingStudentId).slice().reverse()
+  const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
+  const me = p.students.find((s) => s.id === currentStudentId) || p.students[0]
+  const mine = p.selfPlacements.filter((sp) => sp.studentId === currentStudentId).slice().reverse()
 
   const [companyName, setCompanyName] = useState('')
   const [role, setRole] = useState('')

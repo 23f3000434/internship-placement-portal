@@ -209,13 +209,15 @@ export default function FacultyReviewsPage() {
               Cancel
             </Button>
             <Button
+              variant="destructive"
+              disabled={!reason.trim()}
               onClick={() => {
-                if (rejectSP) p.reviewSelfPlacement(rejectSP, false, reason.trim() || 'Documents incomplete.')
+                if (rejectSP && reason.trim()) p.reviewSelfPlacement(rejectSP, false, reason.trim())
                 setRejectSP(null)
                 setReason('')
               }}
             >
-              Reject
+              Reject self-placement
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -80,15 +80,29 @@ export default function MessagesPage() {
           : 'admin1')
 
   const myThreads = useMemo(() => {
-    if (p.role === 'admin') {
-      return p.threads
-    }
     return p.threads.filter((thread) => {
-      if (thread.participantIds?.includes(currentUserId)) return true
-      if (thread.participants?.includes(p.role)) return true
+      // 1. Check if direct participant by User ID
+      if (thread.participantIds && thread.participantIds.length > 0) {
+        if (thread.participantIds.includes(currentUserId)) return true
+        // If current user is admin and thread involves admin
+        if (p.role === 'admin' && (thread.participants?.includes('admin') || thread.participantIds.includes('admin1'))) {
+          return true
+        }
+        return false
+      }
+      // 2. Fallback for legacy seeded threads without participantIds
+      if (p.role === 'admin') return true
+      if (thread.participants?.includes(p.role)) {
+        const myName = p.students.find((s) => s.id === currentUserId)?.name
+        if (myName && thread.participantNames?.includes(myName)) return true
+        const myComp = p.companies.find((c) => c.id === currentUserId)?.name
+        if (myComp && thread.participantNames?.includes(myComp)) return true
+        const myFac = p.faculty.find((f) => f.id === currentUserId)?.name
+        if (myFac && thread.participantNames?.includes(myFac)) return true
+      }
       return false
     })
-  }, [p.threads, p.role, currentUserId])
+  }, [p.threads, p.role, p.students, p.companies, p.faculty, currentUserId])
 
   const isUnread = (thread: (typeof p.threads)[number]) => {
     if (thread.unreadForIds && thread.unreadForIds.length > 0) {

@@ -21,6 +21,7 @@ import { documentLabel } from '@/lib/eligibility'
 import type { DocumentKind, Internship, InternshipDocument, Role } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { validateUploadedFile } from '@/lib/file-validation'
 
 const DOC_ORDER: DocumentKind[] = [
   'offer_letter',
@@ -104,9 +105,17 @@ function DocumentRow({ doc, internship }: { doc: InternshipDocument; internship:
 
   const defaultName = `${doc.kind.replace(/_/g, '-')}-${internship.id}.pdf`
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      const check = await validateUploadedFile(file, ['pdf', 'image'])
+      if (!check.valid) {
+        toast.error('File Upload Blocked', { description: check.error || 'Invalid file format or signature.' })
+        e.target.value = ''
+        setSelectedFile(null)
+        setFileDataUrl(null)
+        return
+      }
       setSelectedFile(file)
       setFileName(file.name)
       const reader = new FileReader()

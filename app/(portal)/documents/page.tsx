@@ -29,6 +29,7 @@ import { documentLabel } from '@/lib/eligibility'
 import type { DocumentKind, InternshipDocument } from '@/lib/types'
 import { Upload, Eye, QrCode, FileText, CheckCircle2, ShieldCheck, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { validateUploadedFile } from '@/lib/file-validation'
 
 const DESCRIPTION: Record<string, string> = {
   student:
@@ -52,17 +53,20 @@ export default function DocumentsPage() {
   const [verifyModalDoc, setVerifyModalDoc] = useState<InternshipDocument | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const student = p.students.find((s) => s.id === p.actingStudentId)
+  const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
+  const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
+  const currentFacultyId = p.authSession?.userId || p.actingFacultyId || 'f1'
+  const student = p.students.find((s) => s.id === currentStudentId) || p.students[0]
 
   const internships =
     p.role === 'student'
-      ? p.internships.filter((n) => n.studentId === p.actingStudentId)
+      ? p.internships.filter((n) => n.studentId === currentStudentId)
       : p.role === 'company'
-        ? p.internships.filter((n) => n.companyId === p.actingCompanyId)
+        ? p.internships.filter((n) => n.companyId === currentCompanyId)
         : p.role === 'faculty'
           ? p.internships.filter((n) => {
               const s = p.students.find((x) => x.id === n.studentId)
-              return s?.facultyId === p.actingFacultyId
+              return s?.facultyId === currentFacultyId
             })
           : p.internships
 
@@ -97,9 +101,17 @@ export default function DocumentsPage() {
   const [uploadMode, setUploadMode] = useState<'file' | 'link'>('file')
   const [fileUrlInput, setFileUrlInput] = useState('')
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      const check = await validateUploadedFile(file, ['pdf', 'image'])
+      if (!check.valid) {
+        toast.error('File Upload Blocked', { description: check.error || 'Invalid file format or signature.' })
+        e.target.value = ''
+        setSelectedFile(null)
+        setFileDataUrl(null)
+        return
+      }
       setSelectedFile(file)
       if (!customDocTitle) {
         setCustomDocTitle(file.name)

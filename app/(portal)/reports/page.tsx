@@ -10,6 +10,8 @@ import { PageHeader } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
 import { usePortal } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { validateUploadedFile } from '@/lib/file-validation'
+import { toast } from 'sonner'
 
 export default function ReportsPage() {
   const p = usePortal()
@@ -50,9 +52,16 @@ export default function ReportsPage() {
     setEvidenceName(null)
   }
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
+      const check = await validateUploadedFile(f, ['pdf', 'image'])
+      if (!check.valid) {
+        toast.error('File Upload Blocked', { description: check.error || 'Invalid file format or signature.' })
+        e.target.value = ''
+        setEvidenceName(null)
+        return
+      }
       setEvidenceName(f.name)
     }
   }

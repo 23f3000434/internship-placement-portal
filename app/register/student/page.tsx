@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { PageHeader } from '@/components/portal/page-header'
 import { usePortal } from '@/lib/store'
+import { validateUploadedFile } from '@/lib/file-validation'
 import type { Student } from '@/lib/types'
 
 export default function RegisterStudentPage() {
@@ -100,9 +101,14 @@ export default function RegisterStudentPage() {
       setError('Resume and identity document are required.')
       return
     }
-    const fileError = validateFile(resumeFile, 'resume') || validateFile(idDocsFile, 'identity')
-    if (fileError) {
-      setError(fileError)
+    const resumeCheck = await validateUploadedFile(resumeFile, ['pdf'], maxFileSize)
+    if (!resumeCheck.valid) {
+      setError(resumeCheck.error || 'Invalid resume file.')
+      return
+    }
+    const idDocsCheck = await validateUploadedFile(idDocsFile, ['pdf', 'image'], maxFileSize)
+    if (!idDocsCheck.valid) {
+      setError(idDocsCheck.error || 'Invalid identity document file.')
       return
     }
 

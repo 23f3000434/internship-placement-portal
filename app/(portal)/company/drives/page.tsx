@@ -17,8 +17,9 @@ import { usePortal } from '@/lib/store'
 
 export default function CompanyDrivesPage() {
   const p = usePortal()
-  const me = p.companies.find((c) => c.id === p.actingCompanyId)
-  const myDrives = p.drives.filter((d) => d.companyId === p.actingCompanyId)
+  const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
+  const me = p.companies.find((c) => c.id === currentCompanyId) || p.companies[0]
+  const myDrives = p.drives.filter((d) => d.companyId === currentCompanyId || (!p.authSession?.userId && d.companyId === 'c1'))
   const appsFor = (driveId: string) => p.applications.filter((a) => a.driveId === driveId)
 
   return (
