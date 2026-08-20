@@ -1,15 +1,36 @@
 'use client'
 
 import Link from 'next/link'
-import { use } from 'react'
-import { ArrowLeft, Check, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { use, useState } from 'react'
+import { ArrowLeft, Check, Edit3, Trash2, Users, X, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { PageHeader } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
 import { checkEligibility } from '@/lib/eligibility'
 import { usePortal } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import type { Drive } from '@/lib/types'
+import { toast } from 'sonner'
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -22,9 +43,34 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 export default function DriveDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const p = usePortal()
   const drive = p.drives.find((d) => d.id === id)
-  const me = p.role === 'student' ? p.students.find((s) => s.id === p.actingStudentId) : null
+  const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
+  const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
+  const me = p.role === 'student' ? p.students.find((s) => s.id === currentStudentId) || p.students[0] : null
+
+  // Edit Modal State
+  const [editOpen, setEditOpen] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editField, setEditField] = useState('')
+  const [editLocation, setEditLocation] = useState('')
+  const [editWorkMode, setEditWorkMode] = useState<Drive['workMode']>('onsite')
+  const [editStipend, setEditStipend] = useState('')
+  const [editDuration, setEditDuration] = useState('')
+  const [editOpenings, setEditOpenings] = useState('')
+  const [editMinCgpa, setEditMinCgpa] = useState('')
+  const [editMaxBacklogs, setEditMaxBacklogs] = useState('')
+  const [editSkills, setEditSkills] = useState('')
+  const [editCerts, setEditCerts] = useState('')
+  const [editStartDate, setEditStartDate] = useState('')
+  const [editEndDate, setEditEndDate] = useState('')
+  const [editDeadline, setEditDeadline] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editStatus, setEditStatus] = useState<Drive['status']>('open')
+
+  // Delete Modal State
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   if (!drive) {
     return (
@@ -38,6 +84,7 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const company = p.companies.find((c) => c.id === drive.companyId)
+  const isOwner = (p.role === 'company' && drive.companyId === currentCompanyId) || p.role === 'admin'
   const backHref = p.role === 'company' ? '/company/drives' : '/drives'
   const backLabel = p.role === 'company' ? 'Back to my drives' : 'Back to drives'
   const elig = me ? checkEligibility(me, drive) : null
@@ -45,6 +92,71 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
     ? p.applications.find((a) => a.driveId === drive.id && a.studentId === me.id)
     : null
   const canApply = elig?.state === 'eligible' && !existingApp && drive.status === 'open'
+
+  const openEditModal = () => {
+    setEditTitle(drive.title)
+    setEditField(drive.field)
+    setEditLocation(drive.location)
+    setEditWorkMode(drive.workMode)
+    setEditStipend(String(drive.stipend))
+    setEditDuration(String(drive.durationWeeks))
+    setEditOpenings(String(drive.openings))
+    setEditMinCgpa(String(drive.minCgpa))
+    setEditMaxBacklogs(String(drive.maxBacklogs))
+    setEditSkills(drive.requiredSkills.join(', '))
+    setEditCerts(drive.requiredCertifications.join(', '))
+    setEditStartDate(drive.startDate)
+    setEditEndDate(drive.endDate)
+    setEditDeadline(drive.deadline)
+    setEditDescription(drive.description)
+    setEditStatus(drive.status)
+    setEditOpen(true)
+  }
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editTitle.trim()) {
+      toast.error('Title Required')
+      return
+    }
+
+    const updatedSkills = editSkills
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+    const updatedCerts = editCerts
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean)
+
+    p.updateDrive(drive.id, {
+      title: editTitle.trim(),
+      field: editField.trim(),
+      location: editLocation.trim(),
+      workMode: editWorkMode,
+      stipend: Number(editStipend) || 0,
+      durationWeeks: Number(editDuration) || 12,
+      openings: Number(editOpenings) || 1,
+      minCgpa: Number(editMinCgpa) || 0,
+      maxBacklogs: Number(editMaxBacklogs) || 0,
+      requiredSkills: updatedSkills,
+      requiredCertifications: updatedCerts,
+      startDate: editStartDate,
+      endDate: editEndDate,
+      deadline: editDeadline,
+      description: editDescription.trim() || drive.description,
+      status: editStatus,
+    })
+
+    setEditOpen(false)
+  }
+
+  const handleDelete = () => {
+    p.deleteDrive(drive.id)
+    setDeleteOpen(false)
+    router.push(p.role === 'company' ? '/company/drives' : '/drives')
+  }
 
   return (
     <>
@@ -57,8 +169,28 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
         title={drive.title}
         description={`${company?.name} · ${drive.field}`}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={drive.status} />
+            {isOwner && (
+              <>
+                <Button variant="outline" size="sm" onClick={openEditModal} className="gap-1.5 text-xs">
+                  <Edit3 className="size-3.5" /> Edit Drive
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDeleteOpen(true)}
+                  className="gap-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" /> Delete
+                </Button>
+                {p.role === 'company' && (
+                  <Button size="sm" render={<Link href="/company/applicants" />} className="gap-1.5 text-xs">
+                    <Users className="size-3.5" /> Applicants
+                  </Button>
+                )}
+              </>
+            )}
             {me && (
               <>
                 {existingApp ? (
@@ -246,6 +378,254 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
           </section>
         </aside>
       </div>
+
+      {/* Edit Drive Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Internship Drive</DialogTitle>
+            <DialogDescription>
+              Update role requirements, criteria, timeline, and status for &quot;{drive.title}&quot;.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveEdit} className="space-y-4 py-2">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="detail-edit-title">Drive Title</Label>
+                <Input
+                  id="detail-edit-title"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="e.g. Full Stack Developer Intern"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-field">Field / Domain</Label>
+                <Input
+                  id="detail-edit-field"
+                  value={editField}
+                  onChange={(e) => setEditField(e.target.value)}
+                  placeholder="e.g. Software Development"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-work-mode">Work Mode</Label>
+                <Select
+                  value={editWorkMode}
+                  onValueChange={(v) => v && setEditWorkMode(v as Drive['workMode'])}
+                >
+                  <SelectTrigger id="detail-edit-work-mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="onsite">On-site</SelectItem>
+                    <SelectItem value="remote">Remote</SelectItem>
+                    <SelectItem value="hybrid">Hybrid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-location">Location (City)</Label>
+                <Input
+                  id="detail-edit-location"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  placeholder="e.g. Pune, Maharashtra"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-status">Drive Status</Label>
+                <Select
+                  value={editStatus}
+                  onValueChange={(v) => v && setEditStatus(v as Drive['status'])}
+                >
+                  <SelectTrigger id="detail-edit-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open (Accepting Applications)</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-stipend">Monthly Stipend (₹)</Label>
+                <Input
+                  id="detail-edit-stipend"
+                  type="number"
+                  min="0"
+                  value={editStipend}
+                  onChange={(e) => setEditStipend(e.target.value)}
+                  placeholder="25000"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-duration">Duration (Weeks)</Label>
+                <Input
+                  id="detail-edit-duration"
+                  type="number"
+                  min="1"
+                  value={editDuration}
+                  onChange={(e) => setEditDuration(e.target.value)}
+                  placeholder="12"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-openings">Available Openings</Label>
+                <Input
+                  id="detail-edit-openings"
+                  type="number"
+                  min="1"
+                  value={editOpenings}
+                  onChange={(e) => setEditOpenings(e.target.value)}
+                  placeholder="3"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-min-cgpa">Minimum CGPA</Label>
+                <Input
+                  id="detail-edit-min-cgpa"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="10"
+                  value={editMinCgpa}
+                  onChange={(e) => setEditMinCgpa(e.target.value)}
+                  placeholder="7.0"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-max-backlogs">Maximum Allowed Backlogs</Label>
+                <Input
+                  id="detail-edit-max-backlogs"
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={editMaxBacklogs}
+                  onChange={(e) => setEditMaxBacklogs(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="detail-edit-skills">Required Skills (comma-separated)</Label>
+                <Input
+                  id="detail-edit-skills"
+                  value={editSkills}
+                  onChange={(e) => setEditSkills(e.target.value)}
+                  placeholder="React, TypeScript, Node.js, PostgreSQL"
+                />
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="detail-edit-certs">Required Certifications (comma-separated)</Label>
+                <Input
+                  id="detail-edit-certs"
+                  value={editCerts}
+                  onChange={(e) => setEditCerts(e.target.value)}
+                  placeholder="AWS Cloud Practitioner, NPTEL DBMS"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-deadline">Application Deadline</Label>
+                <Input
+                  id="detail-edit-deadline"
+                  type="date"
+                  value={editDeadline}
+                  onChange={(e) => setEditDeadline(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="detail-edit-start">Internship Start Date</Label>
+                <Input
+                  id="detail-edit-start"
+                  type="date"
+                  value={editStartDate}
+                  onChange={(e) => setEditStartDate(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="detail-edit-end">Internship End Date</Label>
+                <Input
+                  id="detail-edit-end"
+                  type="date"
+                  min={editStartDate || undefined}
+                  value={editEndDate}
+                  onChange={(e) => setEditEndDate(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="detail-edit-desc">Drive Description &amp; Responsibilities</Label>
+                <Textarea
+                  id="detail-edit-desc"
+                  rows={4}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Describe key responsibilities, requirements, and candidate qualifications..."
+                  required
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save Changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Drive Confirmation Dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="size-5 text-destructive" />
+              Delete Internship Drive
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{drive.title}&quot;? This will remove the drive from student discovery.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+            <p className="font-semibold text-foreground">Drive details:</p>
+            <p className="mt-1">{drive.location} · {drive.durationWeeks} weeks · ₹{drive.stipend.toLocaleString('en-IN')}/mo</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              Confirm Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

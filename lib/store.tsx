@@ -160,8 +160,9 @@ interface PortalState {
   addFaculty: (f: Omit<Faculty, 'id'>) => void
   verifyStudent: (id: string, approve: boolean, reason?: string) => void
   verifyCompany: (id: string, approve: boolean, reason?: string) => void
-  setBlocked: (kind: 'student' | 'company', id: string, blocked: boolean, reason?: string) => void
   createDrive: (d: Omit<Drive, 'id' | 'companyId' | 'status'>) => void
+  updateDrive: (id: string, updates: Partial<Drive>) => void
+  deleteDrive: (id: string) => void
   applyToDrive: (driveId: string) => void
   setApplicationStatus: (appId: string, status: ApplicationStatus, reason?: string) => void
   scheduleInterview: (
@@ -1055,6 +1056,44 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     log(company.name, 'Published drive', d.title)
   }
 
+  const updateDrive: PortalState['updateDrive'] = (id, updates) => {
+    const existing = drives.find((d) => d.id === id)
+    if (!existing) {
+      toast.error('Drive not found')
+      return
+    }
+    const currentCompanyId = authSession?.userId || actingCompanyId || 'c1'
+    if (role === 'company' && existing.companyId !== currentCompanyId) {
+      toast.error('Unauthorized', { description: 'You can only edit drives created by your organization.' })
+      return
+    }
+
+    const updatedDrives = drives.map((d) => (d.id === id ? { ...d, ...updates } : d))
+    setDrives(updatedDrives)
+    syncToCloud({ drives: updatedDrives })
+    toast.success('Drive updated successfully', { description: `"${updates.title || existing.title}" changes saved.` })
+    log(authSession?.name || 'Company', 'Updated internship drive', updates.title || existing.title)
+  }
+
+  const deleteDrive: PortalState['deleteDrive'] = (id) => {
+    const existing = drives.find((d) => d.id === id)
+    if (!existing) {
+      toast.error('Drive not found')
+      return
+    }
+    const currentCompanyId = authSession?.userId || actingCompanyId || 'c1'
+    if (role === 'company' && existing.companyId !== currentCompanyId) {
+      toast.error('Unauthorized', { description: 'You can only delete drives created by your organization.' })
+      return
+    }
+
+    const updatedDrives = drives.filter((d) => d.id !== id)
+    setDrives(updatedDrives)
+    syncToCloud({ drives: updatedDrives })
+    toast.success('Drive deleted', { description: `"${existing.title}" has been removed.` })
+    log(authSession?.name || 'Company', 'Deleted internship drive', existing.title)
+  }
+
   const applyToDrive: PortalState['applyToDrive'] = (driveId) => {
     const student = students.find((s) => s.id === actingStudentId)
     const drive = drives.find((d) => d.id === driveId)
@@ -1827,6 +1866,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       verifyCompany,
       setBlocked,
       createDrive,
+      updateDrive,
+      deleteDrive,
       applyToDrive,
       setApplicationStatus,
       scheduleInterview,
