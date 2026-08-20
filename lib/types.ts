@@ -131,6 +131,8 @@ export interface WeeklyReport {
   skillsLearned: string
   hours: number
   evidenceName?: string
+  evidenceUrl?: string
+  evidenceData?: string
   status: 'submitted' | 'company_approved' | 'faculty_reviewed' | 'flagged'
 }
 
@@ -235,6 +237,18 @@ export interface SelfPlacement {
   joiningLetterUploaded: boolean
   certificateUploaded: boolean
   nocUploaded: boolean
+  offerLetterUrl?: string
+  offerLetterData?: string
+  offerLetterName?: string
+  joiningLetterUrl?: string
+  joiningLetterData?: string
+  joiningLetterName?: string
+  nocUrl?: string
+  nocData?: string
+  nocName?: string
+  certificateUrl?: string
+  certificateData?: string
+  certificateName?: string
   status: 'pending' | 'approved' | 'rejected'
   reason?: string
 }
@@ -246,6 +260,8 @@ export interface Achievement {
   title: string
   date: string
   evidenceName: string
+  evidenceUrl?: string
+  evidenceData?: string
   status: 'pending' | 'verified' | 'rejected'
 }
 

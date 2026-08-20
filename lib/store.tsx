@@ -1474,7 +1474,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const addAchievement: PortalState['addAchievement'] = (a) => {
-    const updated = [...achievements, { ...a, id: uid('ac'), studentId: actingStudentId, status: 'pending' as const }]
+    const currentStudentId = authSession?.userId || actingStudentId || 's1'
+    const updated = [...achievements, { ...a, id: uid('ac'), studentId: currentStudentId, status: 'pending' as const }]
     setAchievements(updated)
     syncToCloud({ achievements: updated })
     notify('faculty', 'Achievement submitted', `"${a.title}" awaits verification.`)

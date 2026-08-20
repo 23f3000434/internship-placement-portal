@@ -1,21 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { FileCheck, FileUp } from 'lucide-react'
+import { Eye, FileCheck, FileUp, Link2, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
+import { DocumentViewerModal, normalizeExternalUrl } from '@/components/portal/document-viewer'
 import { usePortal } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { validateUploadedFile } from '@/lib/file-validation'
+import type { InternshipDocument, WeeklyReport } from '@/lib/types'
 import { toast } from 'sonner'
 
 export default function ReportsPage() {
   const p = usePortal()
-  const myInternships = p.internships.filter((n) => n.studentId === p.actingStudentId)
+  const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
+  const myInternships = p.internships.filter((n) => n.studentId === currentStudentId)
   const active = myInternships.find((n) => n.status === 'active') ?? myInternships[0]
   const reports = active
     ? p.weeklyReports.filter((w) => w.internshipId === active.id).sort((a, b) => b.week - a.week)
@@ -31,7 +34,11 @@ export default function ReportsPage() {
   const [workDone, setWorkDone] = useState('')
   const [skillsLearned, setSkillsLearned] = useState('')
   const [hours, setHours] = useState('40')
+  const [uploadMode, setUploadMode] = useState<'file' | 'url'>('file')
   const [evidenceName, setEvidenceName] = useState<string | null>(null)
+  const [evidenceData, setEvidenceData] = useState<string | undefined>(undefined)
+  const [evidenceUrl, setEvidenceUrl] = useState('')
+  const [viewingDoc, setViewingDoc] = useState<InternshipDocument | null>(null)
 
   const valid = workDone.trim().length > 0 && skillsLearned.trim().length > 0 && Number(hours) > 0 && canSubmit
 
@@ -44,26 +51,50 @@ export default function ReportsPage() {
       workDone: workDone.trim(),
       skillsLearned: skillsLearned.trim(),
       hours: Number(hours),
-      evidenceName: evidenceName || undefined,
+      evidenceName: uploadMode === 'url' ? 'Google Drive / Work Evidence' : (evidenceName || `Week-${nextWeek}-Report.pdf`),
+      evidenceUrl: uploadMode === 'url' ? normalizeExternalUrl(evidenceUrl.trim()) : undefined,
+      evidenceData: uploadMode === 'file' ? evidenceData : undefined,
     })
     setWorkDone('')
     setSkillsLearned('')
     setHours('40')
     setEvidenceName(null)
+    setEvidenceData(undefined)
+    setEvidenceUrl('')
   }
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
-      const check = await validateUploadedFile(f, ['pdf', 'image'])
-      if (!check.valid) {
-        toast.error('File Upload Blocked', { description: check.error || 'Invalid file format or signature.' })
+      const validation = await validateUploadedFile(f, ['application/pdf', 'image/png', 'image/jpeg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
+      if (!validation.ok) {
+        toast.error('Invalid File Format', { description: validation.reason })
         e.target.value = ''
         setEvidenceName(null)
         return
       }
       setEvidenceName(f.name)
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        setEvidenceData(event.target?.result as string)
+      }
+      reader.readAsDataURL(f)
+      toast.success('Evidence Attached', { description: f.name })
     }
+  }
+
+  const openDocViewer = (r: WeeklyReport) => {
+    setViewingDoc({
+      id: r.id,
+      internshipId: r.internshipId,
+      kind: 'completion_certificate',
+      fileName: r.evidenceName || `Week-${r.week}-Evidence.pdf`,
+      fileUrl: r.evidenceUrl,
+      fileData: r.evidenceData,
+      status: r.status === 'company_approved' || r.status === 'faculty_reviewed' ? 'verified' : 'uploaded',
+      uploadedBy: 'student',
+      uploadedAt: new Date().toISOString().slice(0, 10),
+    })
   }
 
   if (!active) {
@@ -146,49 +177,96 @@ export default function ReportsPage() {
                 required
               />
             </div>
-            <label
-              htmlFor="report-evidence-file"
-              className={cn(
-                'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
-                evidenceName ? 'border-foreground bg-muted/20' : 'border-dashed hover:bg-muted/50',
-              )}
-            >
-              <input
-                id="report-evidence-file"
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                className="sr-only"
-                onChange={handleFile}
-              />
-              {evidenceName ? (
-                <FileCheck className="size-4 shrink-0 text-foreground" aria-hidden />
-              ) : (
-                <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              )}
-              <span className="flex-1 min-w-0">
-                <span className={cn('block font-medium truncate', !evidenceName && 'text-muted-foreground')}>
-                  {evidenceName || 'Weekly work evidence (PDF / screenshot)'}
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  {evidenceName ? `${evidenceName} · Attached` : 'Optional — click to select file'}
-                </span>
-              </span>
-              {evidenceName && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    setEvidenceName(null)
-                  }}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Weekly Work Evidence</Label>
+                <div className="flex items-center gap-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setUploadMode('file')}
+                    className={cn(
+                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                      uploadMode === 'file' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    Upload File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUploadMode('url')}
+                    className={cn(
+                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                      uploadMode === 'url' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    Drive Link
+                  </button>
+                </div>
+              </div>
+
+              {uploadMode === 'file' ? (
+                <label
+                  htmlFor="report-evidence-file"
+                  className={cn(
+                    'flex cursor-pointer items-center gap-3 rounded-md border p-3 text-left text-sm transition-colors',
+                    evidenceName ? 'border-primary bg-primary/5' : 'border-dashed hover:bg-muted/50',
+                  )}
                 >
-                  Remove
-                </Button>
+                  <input
+                    id="report-evidence-file"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                    className="sr-only"
+                    onChange={handleFile}
+                  />
+                  {evidenceName ? (
+                    <FileCheck className="size-4 shrink-0 text-primary" aria-hidden />
+                  ) : (
+                    <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  )}
+                  <span className="flex-1 min-w-0">
+                    <span className={cn('block font-medium truncate text-xs', !evidenceName && 'text-muted-foreground')}>
+                      {evidenceName || 'Attach Evidence (PDF / Image / Doc)'}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {evidenceName ? `${evidenceName} · Attached` : 'Optional — click to select file'}
+                    </span>
+                  </span>
+                  {evidenceName && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setEvidenceName(null)
+                        setEvidenceData(undefined)
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </label>
+              ) : (
+                <div className="space-y-1">
+                  <div className="relative">
+                    <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                    <Input
+                      value={evidenceUrl}
+                      onChange={(e) => setEvidenceUrl(e.target.value)}
+                      placeholder="https://drive.google.com/file/d/..."
+                      className="pl-8 text-xs"
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Paste Google Drive link with work samples, commit URLs, or demo documents.
+                  </p>
+                </div>
               )}
-            </label>
+            </div>
+
             <Button type="submit" disabled={!valid}>
               Submit week {nextWeek} report
             </Button>
@@ -206,18 +284,47 @@ export default function ReportsPage() {
           <h2 className="text-sm font-semibold">Submitted reports</h2>
           <ul className="flex flex-col gap-3">
             {reports.map((r) => (
-              <li key={r.id} className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+              <li key={r.id} className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-xs">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold">Week {r.week}</p>
+                  <div>
+                    <p className="text-sm font-semibold">Week {r.week}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{r.workDone}</p>
+                  </div>
                   <StatusBadge status={r.status} />
                 </div>
-                <p className="text-sm text-muted-foreground">{r.workDone}</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>Skills: {r.skillsLearned}</span>
-                  <span className="tabular-nums">{r.hours} hrs</span>
-                  {r.evidenceName && <span>Evidence: {r.evidenceName}</span>}
+
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2.5 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    <span>Skills: {r.skillsLearned}</span>
+                    <span className="tabular-nums font-medium text-foreground">{r.hours} hrs logged</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {r.evidenceUrl && (
+                      <a
+                        href={normalizeExternalUrl(r.evidenceUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium hover:bg-muted"
+                      >
+                        <ExternalLink className="size-3" />
+                        <span>Link ↗</span>
+                      </a>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1"
+                      onClick={() => openDocViewer(r)}
+                    >
+                      <Eye className="size-3" />
+                      <span>View Evidence</span>
+                    </Button>
+                  </div>
                 </div>
-                <ol className="flex flex-wrap items-center gap-1 text-xs" aria-label="Report verification progress">
+
+                <ol className="flex flex-wrap items-center gap-1 text-xs pt-1" aria-label="Report verification progress">
                   {(['submitted', 'company_approved', 'faculty_reviewed'] as const).map((step, i) => {
                     const order = ['submitted', 'company_approved', 'faculty_reviewed']
                     const reached =
@@ -256,6 +363,15 @@ export default function ReportsPage() {
           </ul>
         </section>
       </div>
+
+      {viewingDoc && (
+        <DocumentViewerModal
+          open={Boolean(viewingDoc)}
+          onOpenChange={(open) => !open && setViewingDoc(null)}
+          doc={viewingDoc}
+          internship={active}
+        />
+      )}
     </>
   )
 }

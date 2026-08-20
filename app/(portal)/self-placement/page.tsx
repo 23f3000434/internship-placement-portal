@@ -1,46 +1,61 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, FileCheck, FileUp, Minus } from 'lucide-react'
+import { Check, Eye, FileCheck, FileUp, Link2, Minus, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
+import { DocumentViewerModal, normalizeExternalUrl } from '@/components/portal/document-viewer'
 import { usePortal } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { validateUploadedFile } from '@/lib/file-validation'
+import type { DocumentKind, InternshipDocument, SelfPlacement } from '@/lib/types'
 import { toast } from 'sonner'
+
+export interface DocUploadInfo {
+  uploaded: boolean
+  name?: string
+  data?: string
+  url?: string
+}
 
 function UploadToggle({
   id,
   label,
   required,
-  checked,
+  value,
   onChange,
 }: {
   id: string
   label: string
   required?: boolean
-  checked: boolean
-  onChange: (v: boolean) => void
+  value: DocUploadInfo
+  onChange: (info: DocUploadInfo) => void
 }) {
-  const [fileName, setFileName] = useState<string | null>(null)
+  const [mode, setMode] = useState<'file' | 'url'>('file')
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
-      const check = await validateUploadedFile(f, ['pdf', 'image', 'doc'])
-      if (!check.valid) {
-        toast.error('File Upload Blocked', { description: check.error || 'Invalid file format or signature.' })
+      const validation = await validateUploadedFile(f, ['application/pdf', 'image/png', 'image/jpeg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
+      if (!validation.ok) {
+        toast.error('File Upload Blocked', { description: validation.reason })
         e.target.value = ''
-        setFileName(null)
-        onChange(false)
+        onChange({ uploaded: false })
         return
       }
-      setFileName(f.name)
-      onChange(true)
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        onChange({
+          uploaded: true,
+          name: f.name,
+          data: event.target?.result as string,
+        })
+      }
+      reader.readAsDataURL(f)
       toast.success(`${label} Attached`, { description: f.name })
     }
   }
@@ -48,49 +63,94 @@ function UploadToggle({
   return (
     <div
       className={cn(
-        'flex items-center justify-between gap-3 rounded-lg border p-3 text-left text-sm transition-colors',
-        checked ? 'border-primary bg-primary/5' : 'border-dashed hover:bg-muted/40',
+        'flex flex-col gap-2 rounded-lg border p-3 text-left text-sm transition-colors',
+        value.uploaded ? 'border-primary bg-primary/5' : 'border-dashed hover:bg-muted/40',
       )}
     >
-      <label htmlFor={id} className="flex-1 flex items-center gap-3 cursor-pointer min-w-0">
-        <input
-          id={id}
-          type="file"
-          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-          className="sr-only"
-          onChange={handleFile}
-        />
-        {checked ? (
-          <FileCheck className="size-4 shrink-0 text-primary" aria-hidden />
-        ) : (
-          <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        )}
-        <div className="min-w-0 flex-1">
-          <span className={cn('block font-medium truncate text-xs sm:text-sm', !checked && 'text-muted-foreground')}>
-            {fileName || label}
-          </span>
-          <span className="block text-[11px] text-muted-foreground">
-            {checked
-              ? fileName ? `${fileName} · Attached` : 'Document verified & attached'
-              : required ? 'Required — click to browse file' : 'Optional — click to browse file'}
-          </span>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-foreground">{label} {required && <span className="text-destructive">*</span>}</span>
+        <div className="flex items-center gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setMode('file')}
+            className={cn(
+              'px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors',
+              mode === 'file' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            File
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('url')}
+            className={cn(
+              'px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors',
+              mode === 'url' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            Drive Link
+          </button>
         </div>
-      </label>
-      {checked && (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            setFileName(null)
-            onChange(false)
-          }}
-        >
-          Remove
-        </Button>
+      </div>
+
+      {mode === 'file' ? (
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor={id} className="flex-1 flex items-center gap-2 cursor-pointer min-w-0">
+            <input
+              id={id}
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+              className="sr-only"
+              onChange={handleFile}
+            />
+            {value.uploaded ? (
+              <FileCheck className="size-4 shrink-0 text-primary" aria-hidden />
+            ) : (
+              <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            )}
+            <div className="min-w-0 flex-1">
+              <span className={cn('block font-medium truncate text-xs', !value.uploaded && 'text-muted-foreground')}>
+                {value.name || `Upload ${label}`}
+              </span>
+              <span className="block text-[10px] text-muted-foreground">
+                {value.uploaded ? `${value.name} · Attached` : required ? 'Required file' : 'Optional file'}
+              </span>
+            </div>
+          </label>
+          {value.uploaded && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-6 px-1.5 text-xs text-muted-foreground hover:text-destructive"
+              onClick={(e) => {
+                e.preventDefault()
+                onChange({ uploaded: false })
+              }}
+            >
+              Remove
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <div className="relative">
+            <Link2 className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <Input
+              value={value.url || ''}
+              onChange={(e) => {
+                const val = e.target.value
+                onChange({
+                  uploaded: Boolean(val.trim()),
+                  name: `Drive: ${label}`,
+                  url: normalizeExternalUrl(val.trim()),
+                })
+              }}
+              placeholder="https://drive.google.com/file/..."
+              className="pl-7 h-8 text-xs"
+            />
+          </div>
+        </div>
       )}
     </div>
   )
@@ -108,11 +168,13 @@ export default function SelfPlacementPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [stipend, setStipend] = useState('')
-  const [offerLetter, setOfferLetter] = useState(false)
-  const [joiningLetter, setJoiningLetter] = useState(false)
-  const [certificate, setCertificate] = useState(false)
-  const [noc, setNoc] = useState(false)
+  const [offerDoc, setOfferDoc] = useState<DocUploadInfo>({ uploaded: false })
+  const [joiningDoc, setJoiningDoc] = useState<DocUploadInfo>({ uploaded: false })
+  const [certDoc, setCertDoc] = useState<DocUploadInfo>({ uploaded: false })
+  const [nocDoc, setNocDoc] = useState<DocUploadInfo>({ uploaded: false })
   const [confirm, setConfirm] = useState(false)
+  const [viewingDoc, setViewingDoc] = useState<InternshipDocument | null>(null)
+
   const dateRangeValid = !startDate || !endDate || new Date(endDate) > new Date(startDate)
 
   const submit = (e: React.FormEvent) => {
@@ -150,9 +212,9 @@ export default function SelfPlacementPage() {
       return
     }
 
-    if (!offerLetter && !joiningLetter) {
+    if (!offerDoc.uploaded && !joiningDoc.uploaded) {
       toast.error('Verification Document Required', {
-        description: 'Please upload at least your Offer Letter or Joining Letter PDF.',
+        description: 'Please provide at least your Offer Letter or Joining Letter (File or Drive Link).',
       })
       return
     }
@@ -171,10 +233,22 @@ export default function SelfPlacementPage() {
       startDate,
       endDate,
       stipend: Number(stipend) || 0,
-      offerLetterUploaded: offerLetter,
-      joiningLetterUploaded: joiningLetter,
-      certificateUploaded: certificate,
-      nocUploaded: noc,
+      offerLetterUploaded: offerDoc.uploaded,
+      offerLetterName: offerDoc.name,
+      offerLetterData: offerDoc.data,
+      offerLetterUrl: offerDoc.url,
+      joiningLetterUploaded: joiningDoc.uploaded,
+      joiningLetterName: joiningDoc.name,
+      joiningLetterData: joiningDoc.data,
+      joiningLetterUrl: joiningDoc.url,
+      certificateUploaded: certDoc.uploaded,
+      certificateName: certDoc.name,
+      certificateData: certDoc.data,
+      certificateUrl: certDoc.url,
+      nocUploaded: nocDoc.uploaded,
+      nocName: nocDoc.name,
+      nocData: nocDoc.data,
+      nocUrl: nocDoc.url,
     })
 
     setCompanyName('')
@@ -183,11 +257,47 @@ export default function SelfPlacementPage() {
     setStartDate('')
     setEndDate('')
     setStipend('')
-    setOfferLetter(false)
-    setJoiningLetter(false)
-    setCertificate(false)
-    setNoc(false)
+    setOfferDoc({ uploaded: false })
+    setJoiningDoc({ uploaded: false })
+    setCertDoc({ uploaded: false })
+    setNocDoc({ uploaded: false })
     setConfirm(false)
+  }
+
+  const openDocViewer = (sp: SelfPlacement, kind: DocumentKind) => {
+    let fileName = `${kind.replace(/_/g, '-')}.pdf`
+    let fileUrl: string | undefined = undefined
+    let fileData: string | undefined = undefined
+
+    if (kind === 'offer_letter') {
+      fileName = sp.offerLetterName || 'Offer-Letter.pdf'
+      fileUrl = sp.offerLetterUrl
+      fileData = sp.offerLetterData
+    } else if (kind === 'joining_letter') {
+      fileName = sp.joiningLetterName || 'Joining-Letter.pdf'
+      fileUrl = sp.joiningLetterUrl
+      fileData = sp.joiningLetterData
+    } else if (kind === 'acceptance') {
+      fileName = sp.nocName || 'NOC-Clearance.pdf'
+      fileUrl = sp.nocUrl
+      fileData = sp.nocData
+    } else if (kind === 'completion_certificate') {
+      fileName = sp.certificateName || 'Internship-Certificate.pdf'
+      fileUrl = sp.certificateUrl
+      fileData = sp.certificateData
+    }
+
+    setViewingDoc({
+      id: `sp-${sp.id}-${kind}`,
+      internshipId: sp.id,
+      kind,
+      fileName,
+      fileUrl,
+      fileData,
+      status: 'uploaded',
+      uploadedBy: 'student',
+      uploadedAt: sp.startDate,
+    })
   }
 
   return (
@@ -197,7 +307,7 @@ export default function SelfPlacementPage() {
         description="Register an off-campus internship found independently. Faculty verifies the offer and joining letters before credits are approved."
       />
       <div className="grid gap-6 lg:grid-cols-5">
-        <form onSubmit={submit} className="flex flex-col gap-6 rounded-lg border bg-card p-5 lg:col-span-3">
+        <form onSubmit={submit} className="flex flex-col gap-6 rounded-lg border bg-card p-5 lg:col-span-3 shadow-xs">
           <div>
             <h2 className="text-sm font-semibold">Internship details</h2>
             <p className="text-xs text-muted-foreground">All fields except stipend are mandatory.</p>
@@ -259,7 +369,7 @@ export default function SelfPlacementPage() {
                 </span>
               )}
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
               <Label htmlFor="sp-stipend">Stipend (₹/month)</Label>
               <Input
                 id="sp-stipend"
@@ -272,15 +382,15 @@ export default function SelfPlacementPage() {
             </div>
           </div>
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-medium">Documents</legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <UploadToggle id="sp-offer" label="Offer letter" required checked={offerLetter} onChange={setOfferLetter} />
-              <UploadToggle id="sp-joining" label="Joining letter" checked={joiningLetter} onChange={setJoiningLetter} />
-              <UploadToggle id="sp-cert" label="Internship certificate" checked={certificate} onChange={setCertificate} />
-              <UploadToggle id="sp-noc" label="NOC from college" checked={noc} onChange={setNoc} />
+            <legend className="mb-1 text-sm font-medium">Verification Documents</legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <UploadToggle id="sp-offer" label="Offer letter" required value={offerDoc} onChange={setOfferDoc} />
+              <UploadToggle id="sp-joining" label="Joining letter" value={joiningDoc} onChange={setJoiningDoc} />
+              <UploadToggle id="sp-cert" label="Internship certificate" value={certDoc} onChange={setCertDoc} />
+              <UploadToggle id="sp-noc" label="NOC from college" value={nocDoc} onChange={setNocDoc} />
             </div>
             <p className="text-xs text-muted-foreground">
-              Offer letter or joining letter is required. The certificate can be uploaded after completion.
+              Offer letter or joining letter is required. You can provide a PDF/image or Google Drive link.
             </p>
           </fieldset>
           <div className="flex items-start gap-2">
@@ -310,7 +420,7 @@ export default function SelfPlacementPage() {
           <h2 className="text-sm font-semibold">My submissions</h2>
           <ul className="flex flex-col gap-3">
             {mine.map((sp) => (
-              <li key={sp.id} className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+              <li key={sp.id} className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-xs">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{sp.companyName}</p>
@@ -322,32 +432,52 @@ export default function SelfPlacementPage() {
                   </div>
                   <StatusBadge status={sp.status} />
                 </div>
-                <ul className="flex flex-wrap gap-1.5 text-xs">
-                  {[
-                    ['Offer letter', sp.offerLetterUploaded],
-                    ['Joining letter', sp.joiningLetterUploaded],
-                    ['Certificate', sp.certificateUploaded],
-                    ['NOC', sp.nocUploaded],
-                  ].map(([label, uploaded]) => (
-                    <li
-                      key={label as string}
-                      className={cn(
-                        'flex items-center gap-1 rounded-full border px-2 py-0.5',
-                        uploaded
-                          ? 'border-foreground font-medium'
-                          : 'border-dashed text-muted-foreground',
-                      )}
+                <div className="flex flex-wrap gap-1.5 text-xs border-t pt-2.5">
+                  {sp.offerLetterUploaded && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1"
+                      onClick={() => openDocViewer(sp, 'offer_letter')}
                     >
-                      {uploaded ? (
-                        <Check className="size-3" aria-hidden />
-                      ) : (
-                        <Minus className="size-3" aria-hidden />
-                      )}
-                      {label as string}
-                      <span className="sr-only">{uploaded ? 'uploaded' : 'not uploaded'}</span>
-                    </li>
-                  ))}
-                </ul>
+                      <Eye className="size-3" />
+                      <span>Offer Letter</span>
+                    </Button>
+                  )}
+                  {sp.joiningLetterUploaded && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1"
+                      onClick={() => openDocViewer(sp, 'joining_letter')}
+                    >
+                      <Eye className="size-3" />
+                      <span>Joining Letter</span>
+                    </Button>
+                  )}
+                  {sp.nocUploaded && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1"
+                      onClick={() => openDocViewer(sp, 'acceptance')}
+                    >
+                      <Eye className="size-3" />
+                      <span>NOC</span>
+                    </Button>
+                  )}
+                  {sp.certificateUploaded && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1"
+                      onClick={() => openDocViewer(sp, 'completion_certificate')}
+                    >
+                      <Eye className="size-3" />
+                      <span>Certificate</span>
+                    </Button>
+                  )}
+                </div>
                 {sp.status === 'rejected' && sp.reason && (
                   <p className="text-xs text-muted-foreground">Reason: {sp.reason}</p>
                 )}
@@ -366,6 +496,15 @@ export default function SelfPlacementPage() {
           </ul>
         </section>
       </div>
+
+      {viewingDoc && (
+        <DocumentViewerModal
+          open={Boolean(viewingDoc)}
+          onOpenChange={(open) => !open && setViewingDoc(null)}
+          doc={viewingDoc}
+          student={me}
+        />
+      )}
     </>
   )
 }
