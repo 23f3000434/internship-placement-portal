@@ -38,6 +38,8 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const company = p.companies.find((c) => c.id === drive.companyId)
+  const backHref = p.role === 'company' ? '/company/drives' : '/drives'
+  const backLabel = p.role === 'company' ? 'Back to my drives' : 'Back to drives'
   const elig = me ? checkEligibility(me, drive) : null
   const existingApp = me
     ? p.applications.find((a) => a.driveId === drive.id && a.studentId === me.id)
@@ -47,8 +49,8 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <>
       <div>
-        <Button variant="ghost" size="sm" render={<Link href="/drives" />}>
-          <ArrowLeft /> Back to drives
+        <Button variant="ghost" size="sm" render={<Link href={backHref} />}>
+          <ArrowLeft /> {backLabel}
         </Button>
       </div>
       <PageHeader

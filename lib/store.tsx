@@ -865,14 +865,26 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const createDrive: PortalState['createDrive'] = (d) => {
-    const updated = [{ ...d, id: uid('d'), companyId: actingCompanyId, status: 'open' }, ...drives]
+    const company = companies.find((item) => item.id === actingCompanyId)
+    if (role !== 'company' || company?.status !== 'approved') {
+      throw new Error('Only approved companies can publish internship drives.')
+    }
+    if (!d.title.trim() || !d.description.trim() || !d.field.trim() || !d.location.trim()) {
+      throw new Error('Complete all required drive details.')
+    }
+    if (d.stipend < 0 || d.durationWeeks <= 0 || d.openings <= 0) {
+      throw new Error('Stipend, duration, and openings contain invalid values.')
+    }
+    if (!(d.openDate <= d.deadline && d.deadline < d.startDate && d.startDate < d.endDate)) {
+      throw new Error('Drive timeline dates are invalid.')
+    }
+    const updated = [{ ...d, id: uid('d'), companyId: actingCompanyId, status: 'open' as const }, ...drives]
     setDrives(updated)
     syncToCloud({ drives: updated })
-    const c = companies.find((x) => x.id === actingCompanyId)
-    notify('admin', 'New drive published', `${c?.name} published "${d.title}".`)
-    notify('student', 'New internship drive', `${c?.name} is hiring: ${d.title}.`)
+    notify('admin', 'New drive published', `${company.name} published "${d.title}".`)
+    notify('student', 'New internship drive', `${company.name} is hiring: ${d.title}.`)
     toast.success('Drive published', { description: 'Students matching the filters have been notified.' })
-    log(c?.name ?? 'Company', 'Published drive', d.title)
+    log(company.name, 'Published drive', d.title)
   }
 
   const applyToDrive: PortalState['applyToDrive'] = (driveId) => {

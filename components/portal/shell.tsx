@@ -106,7 +106,7 @@ const ROUTE_ACCESS: { prefix: string; roles: Role[] }[] = [
   { prefix: '/companies', roles: ['student', 'faculty', 'admin'] },
   // Student-owned records
   { prefix: '/profile', roles: ['student'] },
-  { prefix: '/drives', roles: ['student'] },
+  { prefix: '/drives', roles: ['student', 'company'] },
   { prefix: '/applications', roles: ['student'] },
   { prefix: '/self-placement', roles: ['student'] },
   { prefix: '/reports', roles: ['student'] },
