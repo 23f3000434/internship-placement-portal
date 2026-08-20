@@ -23,7 +23,7 @@ import {
   seedAudit,
   faculty,
 } from '@/lib/seed'
-import type { Student, Company, Faculty } from '@/lib/types'
+import type { Student, Company, Faculty, Message, Thread } from '@/lib/types'
 
 const defaultState = {
   students: seedStudents,
@@ -145,7 +145,55 @@ export async function POST(req: Request) {
       })
     }
 
-    // 2. Atomic Company Registration
+    // 2. Atomic message/thread mutation prevents concurrent tabs from overwriting each other.
+    if ((body.action === 'create_thread' || body.action === 'send_message') && body.message) {
+      const { data, error: readError } = await supabase
+        .from('portal_data')
+        .select('state')
+        .eq('id', 'main_v1')
+        .single()
+      if (readError && readError.code !== 'PGRST116') {
+        return NextResponse.json({ synced: false, error: readError.message }, { status: 400 })
+      }
+      const currentState = (data?.state as typeof defaultState) || defaultState
+      const existingMessages = Array.isArray(currentState.messages) ? currentState.messages : seedMessages
+      const existingThreads = Array.isArray(currentState.threads) ? currentState.threads : seedThreads
+      const message = body.message as Message
+      const messages = existingMessages.some((item) => item.id === message.id)
+        ? existingMessages
+        : [...existingMessages, message]
+      let threads: Thread[]
+
+      if (body.action === 'create_thread' && body.thread) {
+        const thread = body.thread as Thread
+        threads = existingThreads.some((item) => item.id === thread.id)
+          ? existingThreads
+          : [thread, ...existingThreads]
+      } else {
+        const requestedThread = body.thread as Thread | undefined
+        if (!requestedThread || !existingThreads.some((item) => item.id === requestedThread.id)) {
+          return NextResponse.json({ synced: false, error: 'Conversation no longer exists.' }, { status: 404 })
+        }
+        threads = existingThreads.map((item) =>
+          item.id === requestedThread.id
+            ? { ...item, unreadFor: requestedThread.unreadFor, unreadForIds: requestedThread.unreadForIds }
+            : item,
+        )
+      }
+
+      const newState = { ...currentState, messages, threads }
+      const { error: saveError } = await supabase.from('portal_data').upsert({
+        id: 'main_v1',
+        state: newState,
+        updated_at: new Date().toISOString(),
+      })
+      if (saveError) {
+        return NextResponse.json({ synced: false, error: saveError.message }, { status: 400 })
+      }
+      return NextResponse.json({ synced: true, messages, threads })
+    }
+
+    // 3. Atomic Company Registration
     if (body.action === 'register_company' && body.company) {
       const company = body.company as Company
       company.hrEmail = (company.hrEmail || '').trim().toLowerCase()

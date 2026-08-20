@@ -161,9 +161,12 @@ function AccessDenied({ pathname, role }: { pathname: string; role: Role }) {
 }
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const { role, threads, notifications } = usePortal()
+  const { role, threads, notifications, authSession, actingStudentId, actingCompanyId, actingFacultyId } = usePortal()
   const pathname = usePathname()
-  const unreadThreads = threads.filter((t) => t.unreadFor.includes(role)).length
+  const currentUserId = authSession?.userId || (role === 'student' ? actingStudentId : role === 'company' ? actingCompanyId : role === 'faculty' ? actingFacultyId : 'admin1')
+  const unreadThreads = threads.filter((thread) =>
+    thread.unreadForIds ? thread.unreadForIds.includes(currentUserId) : thread.unreadFor.includes(role),
+  ).length
   const unreadNotifs = notifications.filter((n) => n.forRole === role && !n.read).length
 
   const items = [

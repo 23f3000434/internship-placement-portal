@@ -265,6 +265,7 @@ export interface Thread {
   participantIds?: string[]
   participantNames: string
   unreadFor: Role[]
+  unreadForIds?: string[]
 }
 
 export interface Notification {

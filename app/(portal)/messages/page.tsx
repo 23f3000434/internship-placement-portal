@@ -1,7 +1,7 @@
 'use client'
 
 import { Mail, MailOpen, Paperclip, Plus, Search, Send, User, Building, GraduationCap, Shield } from 'lucide-react'
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -53,19 +53,14 @@ export default function MessagesPage() {
           ? p.actingFacultyId
           : 'admin1')
 
-  const myThreads = useMemo(() => {
-    return p.threads.filter((t) => {
-      if (p.role === 'admin') return true
-      if (t.participantIds && t.participantIds.length > 0) {
-        return (
-          t.participantIds.includes(currentUserId) ||
-          t.participantIds.includes(p.role) ||
-          (p.role === 'student' && t.participantIds.includes('s2') && !currentUserId.startsWith('s_'))
-        )
-      }
-      return t.participants.includes(p.role)
-    })
-  }, [p.threads, p.role, currentUserId])
+  const myThreads = useMemo(
+    () => p.threads.filter((thread) => thread.participantIds?.includes(currentUserId)),
+    [p.threads, currentUserId],
+  )
+  const isUnread = (thread: (typeof p.threads)[number]) =>
+    thread.unreadForIds
+      ? thread.unreadForIds.includes(currentUserId)
+      : thread.unreadFor.includes(p.role)
 
   const [tab, setTab] = useState('inbox')
   const [query, setQuery] = useState('')
@@ -77,17 +72,12 @@ export default function MessagesPage() {
   const [toRole, setToRole] = useState<Role>(RECIPIENTS[p.role][0])
   const [targetRecipientId, setTargetRecipientId] = useState<string>('')
   const [body, setBody] = useState('')
-
-  // Keep selectedId valid if threads update
-  useEffect(() => {
-    if (!selectedId && myThreads.length > 0) {
-      setSelectedId(myThreads[0].id)
-    }
-  }, [myThreads, selectedId])
+  const [messageError, setMessageError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
 
   const visible = myThreads.filter((t) => {
     const msgs = p.messages.filter((m) => m.threadId === t.id)
-    if (tab === 'unread' && !t.unreadFor.includes(p.role)) return false
+    if (tab === 'unread' && !isUnread(t)) return false
     if (tab === 'sent' && !msgs.some((m) => m.fromRole === p.role || m.fromUserId === currentUserId)) return false
     if (!query.trim()) return true
     const q = query.toLowerCase()
@@ -102,7 +92,7 @@ export default function MessagesPage() {
   const thread = selected
     ? p.messages.filter((m) => m.threadId === selected.id).sort((a, b) => a.at.localeCompare(b.at))
     : []
-  const unreadCount = myThreads.filter((t) => t.unreadFor.includes(p.role)).length
+  const unreadCount = myThreads.filter(isUnread).length
 
   const open = (id: string) => {
     setSelectedId(id)
@@ -151,7 +141,7 @@ export default function MessagesPage() {
             {visible.map((t) => {
               const msgs = p.messages.filter((m) => m.threadId === t.id).sort((a, b) => a.at.localeCompare(b.at))
               const last = msgs[msgs.length - 1]
-              const isUnread = t.unreadFor.includes(p.role)
+              const threadIsUnread = isUnread(t)
               const isSelected = t.id === selected?.id
               return (
                 <li key={t.id}>
@@ -164,14 +154,14 @@ export default function MessagesPage() {
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className={cn('truncate text-xs font-semibold', isUnread && 'text-foreground font-bold')}>
+                      <span className={cn('truncate text-xs font-semibold', threadIsUnread && 'text-foreground font-bold')}>
                         {t.participantNames}
                       </span>
                       {last && (
                         <span className="shrink-0 text-[10px] text-muted-foreground">{last.at}</span>
                       )}
                     </div>
-                    <p className={cn('truncate text-xs', isUnread ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                    <p className={cn('truncate text-xs', threadIsUnread ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
                       {t.subject}
                     </p>
                     {last && (
@@ -241,12 +231,20 @@ export default function MessagesPage() {
 
             <form
               className="flex flex-col gap-3 border-t p-4"
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault()
-                if (!reply.trim()) return
-                p.sendMessage(selected.id, reply.trim(), attach.trim() || undefined)
-                setReply('')
-                setAttach('')
+                if (!reply.trim() || sending) return
+                setSending(true)
+                setMessageError(null)
+                try {
+                  await p.sendMessage(selected.id, reply.trim(), attach.trim() || undefined)
+                  setReply('')
+                  setAttach('')
+                } catch (sendError) {
+                  setMessageError(sendError instanceof Error ? sendError.message : 'Message could not be delivered.')
+                } finally {
+                  setSending(false)
+                }
               }}
             >
               <Label htmlFor="reply" className="sr-only">
@@ -260,6 +258,7 @@ export default function MessagesPage() {
                 placeholder="Write a reply…"
                 className="text-xs"
               />
+              {messageError && <p role="alert" className="text-xs text-destructive">{messageError}</p>}
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   value={attach}
@@ -268,9 +267,9 @@ export default function MessagesPage() {
                   aria-label="Attachment name"
                   className="h-8 max-w-56 text-xs"
                 />
-                <Button type="submit" size="sm" className="ml-auto gap-1.5 text-xs">
+                <Button type="submit" size="sm" className="ml-auto gap-1.5 text-xs" disabled={sending || !reply.trim()}>
                   <Send className="size-3.5" aria-hidden />
-                  Send reply
+                  {sending ? 'Sending…' : 'Send reply'}
                 </Button>
               </div>
             </form>
@@ -332,7 +331,7 @@ export default function MessagesPage() {
             {toRole === 'faculty' && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="to-faculty">Select Faculty Mentor</Label>
-                <Select value={targetRecipientId} onValueChange={setTargetRecipientId}>
+                <Select value={targetRecipientId} onValueChange={(value) => setTargetRecipientId(value ?? '')}>
                   <SelectTrigger id="to-faculty">
                     <SelectValue placeholder="Choose faculty mentor..." />
                   </SelectTrigger>
@@ -350,7 +349,7 @@ export default function MessagesPage() {
             {toRole === 'company' && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="to-company">Select Company Partner</Label>
-                <Select value={targetRecipientId} onValueChange={setTargetRecipientId}>
+                <Select value={targetRecipientId} onValueChange={(value) => setTargetRecipientId(value ?? '')}>
                   <SelectTrigger id="to-company">
                     <SelectValue placeholder="Choose company..." />
                   </SelectTrigger>
@@ -368,7 +367,7 @@ export default function MessagesPage() {
             {toRole === 'student' && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="to-student">Select Student Candidate</Label>
-                <Select value={targetRecipientId} onValueChange={setTargetRecipientId}>
+                <Select value={targetRecipientId} onValueChange={(value) => setTargetRecipientId(value ?? '')}>
                   <SelectTrigger id="to-student">
                     <SelectValue placeholder="Choose student..." />
                   </SelectTrigger>
@@ -403,24 +402,33 @@ export default function MessagesPage() {
               />
             </div>
           </div>
+          {messageError && <p role="alert" className="text-xs text-destructive">{messageError}</p>}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setComposeOpen(false)}>
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                if (!subject.trim() || !body.trim()) return
-                const resolvedTargetId =
-                  targetRecipientId ||
-                  (toRole === 'admin' ? 'admin1' : undefined)
-                p.createThread(subject.trim(), toRole, body.trim(), resolvedTargetId)
-                setComposeOpen(false)
-                setSubject('')
-                setBody('')
-                setTargetRecipientId('')
+              disabled={sending || !subject.trim() || !body.trim() || (toRole !== 'admin' && !targetRecipientId)}
+              onClick={async () => {
+                if (sending) return
+                const resolvedTargetId = targetRecipientId || (toRole === 'admin' ? 'admin1' : undefined)
+                setSending(true)
+                setMessageError(null)
+                try {
+                  const newThreadId = await p.createThread(subject.trim(), toRole, body.trim(), resolvedTargetId)
+                  setSelectedId(newThreadId)
+                  setComposeOpen(false)
+                  setSubject('')
+                  setBody('')
+                  setTargetRecipientId('')
+                } catch (sendError) {
+                  setMessageError(sendError instanceof Error ? sendError.message : 'Message could not be delivered.')
+                } finally {
+                  setSending(false)
+                }
               }}
             >
-              Send message
+              {sending ? 'Sending…' : 'Send message'}
             </Button>
           </DialogFooter>
         </DialogContent>
