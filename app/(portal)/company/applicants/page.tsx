@@ -31,6 +31,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
+import { DocumentViewerModal } from '@/components/portal/document-viewer'
 import { isoDate } from '@/lib/eligibility'
 import { usePortal } from '@/lib/store'
 import type { Application, Student } from '@/lib/types'
@@ -120,15 +121,31 @@ function ProfileDialog({
       </Dialog>
 
       {/* Resume Preview Modal */}
-      <Dialog open={showResume} onOpenChange={setShowResume}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Resume: {student.name}</DialogTitle>
-            <DialogDescription>
-              {student.enrollment} · {student.branch} · Verified Candidate Record
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4 text-xs font-sans">
+      {student.resumeData ? (
+        <DocumentViewerModal
+          open={showResume}
+          onOpenChange={setShowResume}
+          doc={{
+            id: `res_${student.id}`,
+            internshipId: 'applicant_res',
+            kind: 'offer_letter',
+            fileName: student.resumeName || `${student.name.replace(/\s+/g, '_')}_Resume.pdf`,
+            fileData: student.resumeData,
+            uploadedBy: 'student',
+            uploadedAt: 'Current',
+            status: 'verified',
+          }}
+        />
+      ) : (
+        <Dialog open={showResume} onOpenChange={setShowResume}>
+          <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Resume: {student.name}</DialogTitle>
+              <DialogDescription>
+                {student.enrollment} · {student.branch} · Verified Candidate Record
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4 text-xs font-sans">
             <div className="border-b pb-3">
               <h3 className="text-lg font-bold text-foreground">{student.name}</h3>
               <p className="text-muted-foreground">
@@ -176,6 +193,7 @@ function ProfileDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { FileCheck, FileX } from 'lucide-react'
+import { FileCheck, FileX, Eye, ShieldCheck, FileText, CheckCircle2, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,7 +23,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/portal/page-header'
 import { StatusBadge } from '@/components/portal/status-badge'
+import { DocumentViewerModal } from '@/components/portal/document-viewer'
 import { usePortal } from '@/lib/store'
+import type { InternshipDocument } from '@/lib/types'
 
 function DocChip({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -49,6 +51,7 @@ export default function VerificationsPage() {
   const [rejectTarget, setRejectTarget] = useState<{ kind: 'student' | 'company'; id: string; name: string } | null>(null)
   const [warningTarget, setWarningTarget] = useState<{ kind: 'student' | 'company'; id: string; name: string; missing: string } | null>(null)
   const [reason, setReason] = useState('')
+  const [viewDoc, setViewDoc] = useState<InternshipDocument | null>(null)
 
   const handleApproveStudent = (s: typeof pendingStudents[0]) => {
     const missing: string[] = []
@@ -89,7 +92,7 @@ export default function VerificationsPage() {
     <>
       <PageHeader
         title="Verification queues"
-        description="Review submitted documents and approve or reject registrations. Applicants are notified by email."
+        description="Review submitted documents and approve or reject registrations. Applicants are notified immediately."
       />
       <Tabs defaultValue="students">
         <TabsList>
@@ -99,35 +102,89 @@ export default function VerificationsPage() {
         <TabsContent value="students" className="mt-4">
           <ul className="flex flex-col gap-4">
             {pendingStudents.map((s) => (
-              <li key={s.id} className="flex flex-col gap-4 rounded-lg border bg-card p-5">
+              <li key={s.id} className="flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-medium">{s.name}</p>
+                    <p className="font-semibold text-base">{s.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {s.enrollment} · {s.branch} · CGPA {s.cgpa.toFixed(1)} · {s.email}
                     </p>
                   </div>
                   <StatusBadge status="pending" />
                 </div>
-                <div className="flex flex-wrap gap-2">
+
+                <div className="flex flex-wrap items-center gap-2">
                   <DocChip ok={s.resumeUploaded} label="Resume" />
                   <DocChip ok={s.idDocsUploaded} label="ID documents" />
                   {s.skills.map((sk) => (
-                    <span key={sk} className="rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground">
+                    <span key={sk} className="rounded-full border bg-muted/30 px-2.5 py-0.5 text-xs text-muted-foreground">
                       {sk}
                     </span>
                   ))}
                 </div>
+
+                {/* Inspect Attached Files */}
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 p-3 border">
+                  <p className="text-xs font-semibold text-muted-foreground mr-1">Candidate Documents:</p>
+                  {s.resumeUploaded ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 gap-1"
+                      onClick={() =>
+                        setViewDoc({
+                          id: `res_${s.id}`,
+                          internshipId: 'student_reg',
+                          kind: 'offer_letter',
+                          fileName: s.resumeName || `${s.name.replace(/\s+/g, '_')}_Resume.pdf`,
+                          fileData: s.resumeData,
+                          uploadedBy: 'student',
+                          uploadedAt: 'Attached at registration',
+                          status: 'uploaded',
+                        })
+                      }
+                    >
+                      <FileText className="size-3.5" />
+                      View Resume PDF
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">No resume attached</span>
+                  )}
+
+                  {s.idDocsUploaded && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 gap-1"
+                      onClick={() =>
+                        setViewDoc({
+                          id: `id_${s.id}`,
+                          internshipId: 'student_reg',
+                          kind: 'joining_letter',
+                          fileName: s.idDocsName || `${s.name.replace(/\s+/g, '_')}_ID_Card.pdf`,
+                          fileData: s.idDocsData,
+                          uploadedBy: 'student',
+                          uploadedAt: 'Attached at registration',
+                          status: 'uploaded',
+                        })
+                      }
+                    >
+                      <ShieldCheck className="size-3.5" />
+                      View ID Card
+                    </Button>
+                  )}
+                </div>
+
                 <div className="flex flex-wrap items-center gap-2 border-t pt-4">
                   <Button size="sm" onClick={() => handleApproveStudent(s)}>
-                    Approve
+                    <CheckCircle2 className="mr-1 size-3.5" /> Approve Student
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => setRejectTarget({ kind: 'student', id: s.id, name: s.name })}
                   >
-                    Reject with reason
+                    <XCircle className="mr-1 size-3.5" /> Reject with reason
                   </Button>
                   <div className="ml-auto flex items-center gap-2">
                     <Label htmlFor={`mentor-${s.id}`} className="text-xs text-muted-foreground">
@@ -155,8 +212,8 @@ export default function VerificationsPage() {
               </li>
             ))}
             {pendingStudents.length === 0 && (
-              <li className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-                No students awaiting verification.
+              <li className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+                No students awaiting verification. All candidate accounts are processed.
               </li>
             )}
           </ul>
@@ -164,15 +221,15 @@ export default function VerificationsPage() {
         <TabsContent value="companies" className="mt-4">
           <ul className="flex flex-col gap-4">
             {pendingCompanies.map((c) => (
-              <li key={c.id} className="flex flex-col gap-4 rounded-lg border bg-card p-5">
+              <li key={c.id} className="flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-medium">{c.name}</p>
+                    <p className="font-semibold text-base">{c.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {c.industry} · {c.location} · HR: {c.hrName} ({c.hrEmail})
                     </p>
                     {c.addedByStudentId && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Suggested by student:{' '}
                         {p.students.find((s) => s.id === c.addedByStudentId)?.name}
                       </p>
@@ -186,77 +243,83 @@ export default function VerificationsPage() {
                 </div>
                 <div className="flex gap-2 border-t pt-4">
                   <Button size="sm" onClick={() => handleApproveCompany(c)}>
-                    Approve
+                    <CheckCircle2 className="mr-1 size-3.5" /> Approve Company
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => setRejectTarget({ kind: 'company', id: c.id, name: c.name })}
                   >
-                    Reject with reason
+                    <XCircle className="mr-1 size-3.5" /> Reject with reason
                   </Button>
                 </div>
               </li>
             ))}
             {pendingCompanies.length === 0 && (
-              <li className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-                No companies awaiting verification.
+              <li className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+                No companies awaiting verification. All hiring partners are processed.
               </li>
             )}
           </ul>
         </TabsContent>
       </Tabs>
 
-      {/* Warning Confirmation Dialog for Missing Documents */}
-      <Dialog open={!!warningTarget} onOpenChange={(o) => !o && setWarningTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Warning: Mandatory Document Missing</DialogTitle>
-            <DialogDescription>
-              {warningTarget?.name} has not uploaded: <strong>{warningTarget?.missing}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            According to college placement regulations, students and companies should provide valid credentials. Are you sure you want to override and grant administrative approval?
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setWarningTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant="default" onClick={confirmWarningApprove}>
-              Override &amp; Approve
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Rejection Dialog */}
-      <Dialog open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
+      {/* Reject Modal */}
+      <Dialog open={Boolean(rejectTarget)} onOpenChange={() => setRejectTarget(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject {rejectTarget?.name}</DialogTitle>
             <DialogDescription>
-              The applicant is notified by email with this reason and can re-submit documents.
+              Provide a clear reason for rejecting this registration. The applicant will be notified immediately.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="verify-reason">Reason</Label>
+            <Label htmlFor="reason">Rejection reason</Label>
             <Textarea
-              id="verify-reason"
+              id="reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              rows={3}
-              placeholder="e.g. ID document mismatch — re-upload requested"
+              placeholder="e.g. Incomplete verification documents or invalid college enrollment number."
+              rows={4}
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectTarget(null)}>
               Cancel
             </Button>
-            <Button onClick={confirmReject}>Reject</Button>
+            <Button variant="destructive" onClick={confirmReject}>
+              Confirm rejection
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Missing Doc Approval Warning */}
+      <Dialog open={Boolean(warningTarget)} onOpenChange={() => setWarningTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve with missing documents?</DialogTitle>
+            <DialogDescription>
+              {warningTarget?.name} is missing {warningTarget?.missing}. Do you still want to approve this registration?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWarningTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmWarningApprove}>Approve anyway</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Document Viewer */}
+      {viewDoc && (
+        <DocumentViewerModal
+          open={Boolean(viewDoc)}
+          onOpenChange={(open) => !open && setViewDoc(null)}
+          doc={viewDoc}
+        />
+      )}
     </>
   )
 }

@@ -416,6 +416,73 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     audit,
   ])
 
+  // Instant Cloud Sync Helper for Immediate Real-Time Database Commits
+  const syncToCloud = useCallback((customState?: Record<string, unknown>) => {
+    const payload = {
+      students,
+      companies,
+      faculty: facultyList,
+      drives,
+      applications,
+      interviews,
+      internships,
+      documents,
+      weeklyReports,
+      attendance,
+      milestones,
+      feedback,
+      selfPlacements,
+      achievements,
+      threads,
+      messages,
+      notifications,
+      audit,
+      uid: uidCounter,
+      ...customState,
+    }
+
+    try {
+      const localSnapshot = JSON.stringify({
+        authSession,
+        role,
+        actingStudentId,
+        actingCompanyId,
+        ...payload,
+      })
+      localStorage.setItem(SNAPSHOT_KEY, localSnapshot)
+      sessionStorage.setItem(SNAPSHOT_KEY, localSnapshot)
+    } catch {}
+
+    fetch('/api/portal/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {})
+  }, [
+    students,
+    companies,
+    facultyList,
+    drives,
+    applications,
+    interviews,
+    internships,
+    documents,
+    weeklyReports,
+    attendance,
+    milestones,
+    feedback,
+    selfPlacements,
+    achievements,
+    threads,
+    messages,
+    notifications,
+    audit,
+    authSession,
+    role,
+    actingStudentId,
+    actingCompanyId,
+  ])
+
   const log = useCallback((actor: string, action: string, target: string, reason?: string) => {
     setAudit((a) => [
       { id: uid('au'), actor, action, target, reason, at: today() },
@@ -720,13 +787,14 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const verifyStudent: PortalState['verifyStudent'] = (id, approve, reason) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? { ...s, status: approve ? 'approved' : 'rejected', blockReason: approve ? undefined : reason }
-          : s,
-      ),
+    const updated = students.map((s) =>
+      s.id === id
+        ? { ...s, status: approve ? 'approved' : 'rejected', blockReason: approve ? undefined : reason }
+        : s,
     )
+    setStudents(updated)
+    syncToCloud({ students: updated })
+
     const s = students.find((x) => x.id === id)
     if (s) {
       log('Admin (T&P Cell)', approve ? 'Approved student' : 'Rejected student', `${s.name} (${s.enrollment})`, reason)
@@ -736,13 +804,14 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const verifyCompany: PortalState['verifyCompany'] = (id, approve, reason) => {
-    setCompanies((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? { ...c, status: approve ? 'approved' : 'rejected', blockReason: approve ? undefined : reason }
-          : c,
-      ),
+    const updated = companies.map((c) =>
+      c.id === id
+        ? { ...c, status: approve ? 'approved' : 'rejected', blockReason: approve ? undefined : reason }
+        : c,
     )
+    setCompanies(updated)
+    syncToCloud({ companies: updated })
+
     const c = companies.find((x) => x.id === id)
     if (c) {
       log('Admin (T&P Cell)', approve ? 'Approved company' : 'Rejected company', c.name, reason)
@@ -753,22 +822,22 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   const setBlocked: PortalState['setBlocked'] = (kind, id, blocked, reason) => {
     if (kind === 'student') {
-      setStudents((prev) =>
-        prev.map((s) =>
-          s.id === id ? { ...s, status: blocked ? 'blocked' : 'approved', blockReason: blocked ? reason : undefined } : s,
-        ),
+      const updated = students.map((s) =>
+        s.id === id ? { ...s, status: blocked ? 'blocked' : 'approved', blockReason: blocked ? reason : undefined } : s,
       )
+      setStudents(updated)
+      syncToCloud({ students: updated })
       const s = students.find((x) => x.id === id)
       if (s) {
         log('Admin (T&P Cell)', blocked ? 'Blocked student' : 'Unblocked student', s.name, reason)
         emailToast(s.email, blocked ? `Account blocked: ${reason}` : 'Account unblocked')
       }
     } else {
-      setCompanies((prev) =>
-        prev.map((c) =>
-          c.id === id ? { ...c, status: blocked ? 'blocked' : 'approved', blockReason: blocked ? reason : undefined } : c,
-        ),
+      const updated = companies.map((c) =>
+        c.id === id ? { ...c, status: blocked ? 'blocked' : 'approved', blockReason: blocked ? reason : undefined } : c,
       )
+      setCompanies(updated)
+      syncToCloud({ companies: updated })
       const c = companies.find((x) => x.id === id)
       if (c) {
         log('Admin (T&P Cell)', blocked ? 'Blocked company' : 'Unblocked company', c.name, reason)
@@ -778,7 +847,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const createDrive: PortalState['createDrive'] = (d) => {
-    setDrives((prev) => [{ ...d, id: uid('d'), companyId: actingCompanyId, status: 'open' }, ...prev])
+    const updated = [{ ...d, id: uid('d'), companyId: actingCompanyId, status: 'open' }, ...drives]
+    setDrives(updated)
+    syncToCloud({ drives: updated })
     const c = companies.find((x) => x.id === actingCompanyId)
     notify('admin', 'New drive published', `${c?.name} published "${d.title}".`)
     notify('student', 'New internship drive', `${c?.name} is hiring: ${d.title}.`)
@@ -812,7 +883,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       appliedAt: today(),
       history: [{ status: 'applied', at: today() }],
     }
-    setApplications((prev) => [...prev, app])
+    const updated = [...applications, app]
+    setApplications(updated)
+    syncToCloud({ applications: updated })
     notify('company', 'New applicant', `${student.name} applied to ${drive.title}.`)
     toast.success('Application submitted', { description: `${drive.title} — status: Applied` })
   }
@@ -827,13 +900,13 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    setApplications((prev) =>
-      prev.map((a) =>
-        a.id === appId
-          ? { ...a, status, rejectReason: reason, history: [...a.history, { status, at: today() }] }
-          : a,
-      ),
+    const updated = applications.map((a) =>
+      a.id === appId
+        ? { ...a, status, rejectReason: reason, history: [...a.history, { status, at: today() }] }
+        : a,
     )
+    setApplications(updated)
+    syncToCloud({ applications: updated })
 
     if (student && drive) {
       const label = status.replace(/_/g, ' ')
@@ -846,14 +919,16 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const scheduleInterview: PortalState['scheduleInterview'] = (appId, details) => {
-    setInterviews((prev) => [...prev, { ...details, id: uid('i'), applicationId: appId, acknowledged: false }])
-    setApplications((prev) =>
-      prev.map((a) =>
-        a.id === appId
-          ? { ...a, status: 'interview_scheduled', history: [...a.history, { status: 'interview_scheduled', at: today() }] }
-          : a,
-      ),
+    const updatedInterviews = [...interviews, { ...details, id: uid('i'), applicationId: appId, acknowledged: false }]
+    const updatedApps = applications.map((a) =>
+      a.id === appId
+        ? { ...a, status: 'interview_scheduled' as ApplicationStatus, history: [...a.history, { status: 'interview_scheduled' as ApplicationStatus, at: today() }] }
+        : a,
     )
+    setInterviews(updatedInterviews)
+    setApplications(updatedApps)
+    syncToCloud({ interviews: updatedInterviews, applications: updatedApps })
+
     const app = applications.find((a) => a.id === appId)
     const student = students.find((s) => s.id === app?.studentId)
     const drive = drives.find((d) => d.id === app?.driveId)
@@ -867,7 +942,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const acknowledgeInterview: PortalState['acknowledgeInterview'] = (id) => {
-    setInterviews((prev) => prev.map((i) => (i.id === id ? { ...i, acknowledged: true } : i)))
+    const updated = interviews.map((i) => (i.id === id ? { ...i, acknowledged: true } : i))
+    setInterviews(updated)
+    syncToCloud({ interviews: updated })
     toast.success('Interview acknowledged', { description: 'The company has been notified.' })
   }
 
@@ -888,9 +965,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       status: 'active',
       ppoStatus: 'none',
     }
-    setInternships((prev) => [...prev, internship])
-    setAttendance((prev) => [
-      ...prev,
+    const updatedInternships = [...internships, internship]
+    const updatedAttendance = [
+      ...attendance,
       {
         internshipId: internship.id,
         workingDays: 0,
@@ -899,11 +976,16 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         leave: 0,
         entries: [],
       },
-    ])
-    setDocuments((prev) => [
-      ...prev,
+    ]
+    const updatedDocs = [
+      ...documents,
       ...openDocumentLedger(internship.id, ['offer_letter', 'acceptance']),
-    ])
+    ]
+    setInternships(updatedInternships)
+    setAttendance(updatedAttendance)
+    setDocuments(updatedDocs)
+    syncToCloud({ internships: updatedInternships, attendance: updatedAttendance, documents: updatedDocs })
+
     const student = students.find((s) => s.id === app.studentId)
     notify('company', 'Offer accepted', `${student?.name} accepted the offer for ${drive.title}. Tracking begins.`)
     notify('admin', 'Internship started', `${student?.name} — ${drive.title}.`)
@@ -912,14 +994,18 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const submitWeeklyReport: PortalState['submitWeeklyReport'] = (r) => {
-    setWeeklyReports((prev) => [...prev, { ...r, id: uid('w'), status: 'submitted' }])
+    const updated = [...weeklyReports, { ...r, id: uid('w'), status: 'submitted' as const }]
+    setWeeklyReports(updated)
+    syncToCloud({ weeklyReports: updated })
     notify('company', 'Weekly report submitted', `Week ${r.week} report awaiting supervisor verification.`)
     notify('faculty', 'Weekly report submitted', `Week ${r.week} report submitted by your mentee.`)
     toast.success(`Week ${r.week} report submitted`, { description: 'Sent to company supervisor for verification.' })
   }
 
   const setReportStatus: PortalState['setReportStatus'] = (id, status) => {
-    setWeeklyReports((prev) => prev.map((w) => (w.id === id ? { ...w, status } : w)))
+    const updated = weeklyReports.map((w) => (w.id === id ? { ...w, status } : w))
+    setWeeklyReports(updated)
+    syncToCloud({ weeklyReports: updated })
     const labels: Record<WeeklyReport['status'], string> = {
       submitted: 'Submitted',
       company_approved: 'Verified by company',
@@ -933,60 +1019,62 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   const submitAttendanceDay: PortalState['submitAttendanceDay'] = (internshipId, kind) => {
     const t = today()
-    setAttendance((prev) =>
-      prev.map((a) => {
-        if (a.internshipId !== internshipId) return a
-        const existingEntries = a.entries ?? []
-        const todayEntryIndex = existingEntries.findIndex((e) => e.date === t)
+    const updated = attendance.map((a) => {
+      if (a.internshipId !== internshipId) return a
+      const existingEntries = a.entries ?? []
+      const todayEntryIndex = existingEntries.findIndex((e) => e.date === t)
 
-        if (todayEntryIndex >= 0) {
-          const oldStatus = existingEntries[todayEntryIndex].status
-          if (oldStatus === kind) {
-            toast.info(`Today's attendance is already recorded as ${kind}.`)
-            return a
-          }
-          const updatedEntries = [...existingEntries]
-          updatedEntries[todayEntryIndex] = { date: t, status: kind }
-          toast.success(`Attendance updated to ${kind} for today`)
-          return {
-            ...a,
-            [oldStatus]: Math.max(0, a[oldStatus] - 1),
-            [kind]: a[kind] + 1,
-            lastMarkedDate: t,
-            entries: updatedEntries,
-          }
+      if (todayEntryIndex >= 0) {
+        const oldStatus = existingEntries[todayEntryIndex].status
+        if (oldStatus === kind) {
+          toast.info(`Today's attendance is already recorded as ${kind}.`)
+          return a
         }
-
-        toast.success('Attendance recorded', { description: 'Sent to supervisor for approval.' })
+        const updatedEntries = [...existingEntries]
+        updatedEntries[todayEntryIndex] = { date: t, status: kind }
+        toast.success(`Attendance updated to ${kind} for today`)
         return {
           ...a,
-          workingDays: a.workingDays + 1,
+          [oldStatus]: Math.max(0, a[oldStatus] - 1),
           [kind]: a[kind] + 1,
           lastMarkedDate: t,
-          entries: [...existingEntries, { date: t, status: kind }],
+          entries: updatedEntries,
         }
-      }),
-    )
+      }
+
+      toast.success('Attendance recorded', { description: 'Sent to supervisor for approval.' })
+      return {
+        ...a,
+        workingDays: a.workingDays + 1,
+        [kind]: a[kind] + 1,
+        lastMarkedDate: t,
+        entries: [...existingEntries, { date: t, status: kind }],
+      }
+    })
+    setAttendance(updated)
+    syncToCloud({ attendance: updated })
   }
 
   const setMilestoneStatus: PortalState['setMilestoneStatus'] = (id, status, remark) => {
-    setMilestones((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, status, companyRemark: remark ?? m.companyRemark } : m)),
-    )
+    const updated = milestones.map((m) => (m.id === id ? { ...m, status, companyRemark: remark ?? m.companyRemark } : m))
+    setMilestones(updated)
+    syncToCloud({ milestones: updated })
     toast.success('Milestone updated')
   }
 
   const submitFeedback: PortalState['submitFeedback'] = (f) => {
-    setFeedback((prev) => [...prev, { ...f, id: uid('fb') }])
+    const updated = [...feedback, { ...f, id: uid('fb') }]
+    setFeedback(updated)
+    syncToCloud({ feedback: updated })
     notify('faculty', 'Company feedback submitted', `Week ${f.week} intern feedback recorded.`)
     notify('admin', 'Company feedback submitted', `Week ${f.week} intern feedback recorded.`)
     toast.success(`Week ${f.week} feedback submitted`)
   }
 
   const submitFinalEvaluation: PortalState['submitFinalEvaluation'] = (internshipId, text) => {
-    setInternships((prev) =>
-      prev.map((n) => (n.id === internshipId ? { ...n, finalEvaluation: text, status: 'completed' } : n)),
-    )
+    const updated = internships.map((n) => (n.id === internshipId ? { ...n, finalEvaluation: text, status: 'completed' as const } : n))
+    setInternships(updated)
+    syncToCloud({ internships: updated })
     notify('admin', 'Internship completed', 'A final evaluation was submitted and the internship marked complete.')
     toast.success('Final evaluation submitted', { description: 'Internship marked as completed.' })
   }
@@ -1006,23 +1094,24 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     fileData,
     fileSize,
   ) => {
-    setDocuments((prev) => {
-      const existing = prev.find((d) => d.internshipId === internshipId && d.kind === kind)
-      const next: Partial<InternshipDocument> = {
-        fileName,
-        fileData: fileData ?? existing?.fileData,
-        fileSize: fileSize ?? existing?.fileSize,
-        uploadedBy: role === 'company' ? 'company' : 'student',
-        uploadedAt: today(),
-        status: 'uploaded',
-        verifyCode: existing?.verifyCode ?? verifyCode(internshipId, kind),
-        rejectReason: undefined,
-      }
-      if (existing) {
-        return prev.map((d) => (d.id === existing.id ? { ...d, ...next } : d))
-      }
-      return [...prev, { id: uid('doc'), internshipId, kind, ...next } as InternshipDocument]
-    })
+    const existing = documents.find((d) => d.internshipId === internshipId && d.kind === kind)
+    const next: Partial<InternshipDocument> = {
+      fileName,
+      fileData: fileData ?? existing?.fileData,
+      fileSize: fileSize ?? existing?.fileSize,
+      uploadedBy: role === 'company' ? 'company' : 'student',
+      uploadedAt: today(),
+      status: 'uploaded',
+      verifyCode: existing?.verifyCode ?? verifyCode(internshipId, kind),
+      rejectReason: undefined,
+    }
+    const updated = existing
+      ? documents.map((d) => (d.id === existing.id ? { ...d, ...next } : d))
+      : [...documents, { id: uid('doc'), internshipId, kind, ...next } as InternshipDocument]
+
+    setDocuments(updated)
+    syncToCloud({ documents: updated })
+
     notify('admin', 'Document uploaded', `${docLabels[kind]} uploaded and awaiting T&P verification.`)
     toast.success(`${docLabels[kind]} uploaded`, {
       description: 'Document saved and sent to T&P cell for verification.',
@@ -1030,9 +1119,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const setDocumentStatus: PortalState['setDocumentStatus'] = (id, status, reason) => {
-    setDocuments((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status, rejectReason: status === 'rejected' ? reason : undefined } : d)),
-    )
+    const updated = documents.map((d) => (d.id === id ? { ...d, status, rejectReason: status === 'rejected' ? reason : undefined } : d))
+    setDocuments(updated)
+    syncToCloud({ documents: updated })
+
     const doc = documents.find((d) => d.id === id)
     const internship = internships.find((n) => n.id === doc?.internshipId)
     const student = students.find((s) => s.id === internship?.studentId)
@@ -1051,13 +1141,14 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const setPpoStatus: PortalState['setPpoStatus'] = (internshipId, status, opts) => {
-    setInternships((prev) =>
-      prev.map((n) =>
-        n.id === internshipId
-          ? { ...n, ppoStatus: status, ppoPackage: opts?.ppoPackage ?? n.ppoPackage, ppoNote: opts?.note ?? n.ppoNote }
-          : n,
-      ),
+    const updated = internships.map((n) =>
+      n.id === internshipId
+        ? { ...n, ppoStatus: status, ppoPackage: opts?.ppoPackage ?? n.ppoPackage, ppoNote: opts?.note ?? n.ppoNote }
+        : n,
     )
+    setInternships(updated)
+    syncToCloud({ internships: updated })
+
     const internship = internships.find((n) => n.id === internshipId)
     const student = students.find((s) => s.id === internship?.studentId)
     const labels: Record<PpoStatus, string> = {
@@ -1090,17 +1181,23 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       toast.error('Invalid Date Range', { description: 'Internship end date must be after start date.' })
       return
     }
-    setSelfPlacements((prev) => [...prev, { ...sp, id: uid('sp'), studentId: actingStudentId, status: 'pending' }])
+    const updated = [...selfPlacements, { ...sp, id: uid('sp'), studentId: actingStudentId, status: 'pending' as const }]
+    setSelfPlacements(updated)
+    syncToCloud({ selfPlacements: updated })
     notify('faculty', 'Self-placement submitted', `A self-placed internship at ${sp.companyName} awaits verification.`)
     toast.success('Self-placement submitted', { description: 'Sent to faculty for verification.' })
   }
 
   const reviewSelfPlacement: PortalState['reviewSelfPlacement'] = (id, approve, reason) => {
-    setSelfPlacements((prev) =>
-      prev.map((sp) => (sp.id === id ? { ...sp, status: approve ? 'approved' : 'rejected', reason } : sp)),
-    )
+    const updatedSP = selfPlacements.map((sp) => (sp.id === id ? { ...sp, status: (approve ? 'approved' : 'rejected') as 'approved' | 'rejected', reason } : sp))
+    setSelfPlacements(updatedSP)
+
     const sp = selfPlacements.find((x) => x.id === id)
     const student = students.find((s) => s.id === sp?.studentId)
+    let updatedInternships = internships
+    let updatedAttendance = attendance
+    let updatedDocs = documents
+
     if (sp && approve) {
       const internship: Internship = {
         id: uid('n'),
@@ -1114,30 +1211,36 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         status: 'active',
         ppoStatus: 'none',
       }
-      setInternships((prev) => [...prev, internship])
-      setAttendance((prev) => [...prev, { internshipId: internship.id, workingDays: 0, present: 0, absent: 0, leave: 0 }])
-      // Carry across whichever documents the student already attached to the request.
+      updatedInternships = [...internships, internship]
+      updatedAttendance = [...attendance, { internshipId: internship.id, workingDays: 0, present: 0, absent: 0, leave: 0, entries: [] }]
       const prefilled: DocumentKind[] = []
       if (sp.offerLetterUploaded) prefilled.push('offer_letter')
       if (sp.joiningLetterUploaded) prefilled.push('joining_letter')
       if (sp.certificateUploaded) prefilled.push('completion_certificate')
-      setDocuments((prev) => [...prev, ...openDocumentLedger(internship.id, prefilled)])
+      updatedDocs = [...documents, ...openDocumentLedger(internship.id, prefilled)]
+      setInternships(updatedInternships)
+      setAttendance(updatedAttendance)
+      setDocuments(updatedDocs)
     }
+    syncToCloud({ selfPlacements: updatedSP, internships: updatedInternships, attendance: updatedAttendance, documents: updatedDocs })
+
     notify('student', approve ? 'Self-placement approved' : 'Self-placement rejected', approve ? `Your internship at ${sp?.companyName} is approved. Tracking begins.` : `Reason: ${reason}`)
     if (student) emailToast(student.email, approve ? 'Self-placement approved' : 'Self-placement rejected')
     log('Prof. R. Kulkarni', approve ? 'Approved self-placement' : 'Rejected self-placement', `${student?.name} — ${sp?.companyName}`, reason)
   }
 
   const addAchievement: PortalState['addAchievement'] = (a) => {
-    setAchievements((prev) => [...prev, { ...a, id: uid('ac'), studentId: actingStudentId, status: 'pending' }])
+    const updated = [...achievements, { ...a, id: uid('ac'), studentId: actingStudentId, status: 'pending' as const }]
+    setAchievements(updated)
+    syncToCloud({ achievements: updated })
     notify('faculty', 'Achievement submitted', `"${a.title}" awaits verification.`)
     toast.success('Achievement submitted', { description: 'Sent to faculty for verification.' })
   }
 
   const reviewAchievement: PortalState['reviewAchievement'] = (id, approve) => {
-    setAchievements((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: approve ? 'verified' : 'rejected' } : a)),
-    )
+    const updated = achievements.map((a) => (a.id === id ? { ...a, status: (approve ? 'verified' : 'rejected') as 'verified' | 'rejected' } : a))
+    setAchievements(updated)
+    syncToCloud({ achievements: updated })
     const a = achievements.find((x) => x.id === id)
     notify('student', approve ? 'Achievement verified' : 'Achievement rejected', a?.title ?? '')
     toast.success(approve ? 'Achievement verified' : 'Achievement rejected')
@@ -1145,8 +1248,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const addCompanyByStudent: PortalState['addCompanyByStudent'] = (name, industry, website) => {
-    setCompanies((prev) => [
-      ...prev,
+    const updated = [
+      ...companies,
       {
         id: uid('c'),
         name,
@@ -1157,10 +1260,12 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         location: '—',
         about: 'Added by a student; details pending company registration.',
         certificateUploaded: false,
-        status: 'pending',
+        status: 'pending' as const,
         addedByStudentId: actingStudentId,
       },
-    ])
+    ]
+    setCompanies(updated)
+    syncToCloud({ companies: updated })
     notify('admin', 'New company suggested', `${name} was added by a student and needs approval.`)
     toast.success('Company submitted', { description: 'Sent to admin for approval.' })
   }
@@ -1173,17 +1278,25 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       faculty: facultyList.find((f) => f.id === currentUserId)?.name ?? 'Prof. R. Kulkarni',
       admin: 'T&P Cell',
     }
-    setMessages((prev) => [
-      ...prev,
-      { id: uid('msg'), threadId, fromRole: role, fromUserId: currentUserId, fromName: names[role], body, at: today(), attachmentName },
-    ])
-    setThreads((prev) =>
-      prev.map((t) =>
-        t.id === threadId
-          ? { ...t, unreadFor: t.participants.filter((p) => p !== role) }
-          : t,
-      ),
+    const newMsg: Message = {
+      id: uid('msg'),
+      threadId,
+      fromRole: role,
+      fromUserId: currentUserId,
+      fromName: names[role],
+      body,
+      at: today(),
+      attachmentName,
+    }
+    const updatedMsgs = [...messages, newMsg]
+    const updatedThreads = threads.map((t) =>
+      t.id === threadId
+        ? { ...t, unreadFor: t.participants.filter((p) => p !== role) }
+        : t,
     )
+    setMessages(updatedMsgs)
+    setThreads(updatedThreads)
+    syncToCloud({ messages: updatedMsgs, threads: updatedThreads })
     toast.success('Message sent', { description: 'Notification delivered to the recipient.' })
   }
 
@@ -1213,36 +1326,48 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const participantIds = [currentUserId]
     if (targetRecipientId) participantIds.push(targetRecipientId)
 
-    setThreads((prev) => [
-      {
-        id: threadId,
-        subject,
-        participants: [role, toRole],
-        participantIds,
-        participantNames: `${myName} ↔ ${targetName}`,
-        unreadFor: [toRole],
-      },
-      ...prev,
-    ])
-    setMessages((prev) => [
-      ...prev,
-      { id: uid('msg'), threadId, fromRole: role, fromUserId: currentUserId, fromName: myName, body, at: today() },
-    ])
+    const newThread: Thread = {
+      id: threadId,
+      subject,
+      participants: [role, toRole],
+      participantIds,
+      participantNames: `${myName} ↔ ${targetName}`,
+      unreadFor: [toRole],
+    }
+    const newMsg: Message = {
+      id: uid('msg'),
+      threadId,
+      fromRole: role,
+      fromUserId: currentUserId,
+      fromName: myName,
+      body,
+      at: today(),
+    }
+
+    const updatedThreads = [newThread, ...threads]
+    const updatedMsgs = [...messages, newMsg]
+    setThreads(updatedThreads)
+    setMessages(updatedMsgs)
+    syncToCloud({ threads: updatedThreads, messages: updatedMsgs })
     toast.success('Message sent', { description: `Notification delivered to ${targetName}.` })
   }
 
   const markThreadRead: PortalState['markThreadRead'] = (threadId) => {
-    setThreads((prev) =>
-      prev.map((t) => (t.id === threadId ? { ...t, unreadFor: t.unreadFor.filter((r) => r !== role) } : t)),
-    )
+    const updated = threads.map((t) => (t.id === threadId ? { ...t, unreadFor: t.unreadFor.filter((r) => r !== role) } : t))
+    setThreads(updated)
+    syncToCloud({ threads: updated })
   }
 
   const markNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => (n.forRole === role ? { ...n, read: true } : n)))
+    const updated = notifications.map((n) => (n.forRole === role ? { ...n, read: true } : n))
+    setNotifications(updated)
+    syncToCloud({ notifications: updated })
   }
 
   const setAtRisk: PortalState['setAtRisk'] = (studentId, flag) => {
-    setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, atRisk: flag } : s)))
+    const updated = students.map((s) => (s.id === studentId ? { ...s, atRisk: flag } : s))
+    setStudents(updated)
+    syncToCloud({ students: updated })
     toast.success(flag ? 'Student flagged as at-risk' : 'At-risk flag removed')
   }
 
@@ -1250,9 +1375,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const student = students.find((s) => s.id === studentId)
     const mentor = faculty.find((f) => f.id === facultyId)
     if (!student || !mentor || student.facultyId === facultyId) return
-    setStudents((prev) =>
-      prev.map((s) => (s.id === studentId ? { ...s, facultyId } : s)),
-    )
+    const updated = students.map((s) => (s.id === studentId ? { ...s, facultyId } : s))
+    setStudents(updated)
+    syncToCloud({ students: updated })
     log('Admin (T&P Cell)', 'Assigned faculty mentor', `${student.name} → ${mentor.name}`)
     notify(
       'student',
@@ -1264,11 +1389,14 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const updateProfile: PortalState['updateProfile'] = (patch) => {
-    setStudents((prev) => prev.map((s) => (s.id === actingStudentId ? { ...s, ...patch } : s)))
-    const student = students.find((s) => s.id === actingStudentId)
+    const updated = students.map((s) => (s.id === actingStudentId ? { ...s, ...patch } : s))
+    setStudents(updated)
+    syncToCloud({ students: updated })
+
+    const student = updated.find((s) => s.id === actingStudentId)
     if (patch.resumeUploaded) {
       notify('admin', 'Resume uploaded', `${student?.name} uploaded a new resume for verification.`)
-      toast.success('Resume uploaded', { description: 'Eligibility checks now include your resume.' })
+      toast.success('Resume uploaded', { description: 'Eligibility checks and T&P verifications now include your resume.' })
       return
     }
     if (patch.idDocsUploaded) {
