@@ -12,10 +12,15 @@ import { FileText, CheckCircle2, AlertCircle, ArrowRight, User } from 'lucide-re
 function StudentDashboard() {
   const p = usePortal()
   const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
-  const me = p.students.find((s) => s.id === currentStudentId) || p.students[0]
+  const me =
+    p.students.find((s) => s.id === currentStudentId) ||
+    p.students.find((s) => s.email?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.students.find((s) => s.id === p.actingStudentId) ||
+    p.students[0]
   if (!me) return null
-  const myApps = p.applications.filter((a) => a.studentId === me.id)
-  const myInternships = p.internships.filter((n) => n.studentId === me.id)
+  const candidateIds = new Set([currentStudentId, me.id, p.actingStudentId].filter(Boolean))
+  const myApps = p.applications.filter((a) => candidateIds.has(a.studentId))
+  const myInternships = p.internships.filter((n) => candidateIds.has(n.studentId))
   const active = myInternships.find((n) => n.status === 'active')
   const eligibleCount = p.drives.filter(
     (d) => getDriveStatus(d, p.applications) === 'open' && checkEligibility(me, d).state === 'eligible',
@@ -174,11 +179,23 @@ function StudentDashboard() {
 function CompanyDashboard() {
   const p = usePortal()
   const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
-  const me = p.companies.find((c) => c.id === currentCompanyId) || p.companies[0]
+  const me =
+    p.companies.find((c) => c.id === currentCompanyId) ||
+    p.companies.find((c) => c.hrEmail?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.email?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.id === p.actingCompanyId) ||
+    p.companies[0]
   if (!me) return null
-  const myDrives = p.drives.filter((d) => d.companyId === me.id || (!p.authSession?.userId && d.companyId === 'c1'))
-  const myApps = p.applications.filter((a) => myDrives.some((d) => d.id === a.driveId))
-  const interns = p.internships.filter((n) => n.companyId === me.id && n.status === 'active')
+  const companyIds = new Set([currentCompanyId, me.id, p.actingCompanyId].filter(Boolean))
+  const myDrives = p.drives.filter(
+    (d) =>
+      companyIds.has(d.companyId) ||
+      (me && d.companyId === me.id) ||
+      (!p.authSession?.userId && (d.companyId === 'c1' || d.companyId === p.actingCompanyId)),
+  )
+  const driveIds = new Set(myDrives.map((d) => d.id))
+  const myApps = p.applications.filter((a) => driveIds.has(a.driveId))
+  const interns = p.internships.filter((n) => companyIds.has(n.companyId) && n.status === 'active')
 
   if (me.status === 'blocked') {
     return (

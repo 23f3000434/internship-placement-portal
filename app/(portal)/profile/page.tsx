@@ -88,7 +88,12 @@ export default function ProfilePage() {
   const resumeInputRef = useRef<HTMLInputElement>(null)
   const idDocsInputRef = useRef<HTMLInputElement>(null)
 
-  const student = p.students.find((s) => s.id === p.actingStudentId) || p.students[0]
+  const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
+  const student =
+    p.students.find((s) => s.id === currentStudentId) ||
+    p.students.find((s) => s.email?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.students.find((s) => s.id === p.actingStudentId) ||
+    p.students[0]
 
   const openEditModal = () => {
     if (!student) return
@@ -144,8 +149,9 @@ export default function ProfilePage() {
     p.updateProfile({ certifications: student.certifications.filter((x) => x !== cert) })
   }
 
-  const myApps = p.applications.filter((a) => a.studentId === student.id)
-  const myInternships = p.internships.filter((n) => n.studentId === student.id)
+  const candidateIds = new Set([currentStudentId, student?.id, p.actingStudentId].filter(Boolean))
+  const myApps = p.applications.filter((a) => candidateIds.has(a.studentId))
+  const myInternships = p.internships.filter((n) => candidateIds.has(n.studentId))
   const mentor = p.faculty.find((f) => f.id === student.facultyId)
 
   const openDrives = p.drives.filter((d) => d.status === 'open')

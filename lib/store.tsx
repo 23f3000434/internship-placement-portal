@@ -1095,12 +1095,21 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const applyToDrive: PortalState['applyToDrive'] = (driveId) => {
-    const student = students.find((s) => s.id === actingStudentId)
+    const currentStudentId = authSession?.userId || actingStudentId || 's1'
+    const student =
+      students.find((s) => s.id === currentStudentId) ||
+      students.find((s) => s.email?.trim().toLowerCase() === authSession?.email?.trim().toLowerCase()) ||
+      students.find((s) => s.id === actingStudentId) ||
+      students[0]
     const drive = drives.find((d) => d.id === driveId)
-    if (!student || !drive) return
+    if (!student || !drive) {
+      toast.error('Application Error', { description: 'Could not resolve student account or drive details.' })
+      return
+    }
 
-    // Duplicate check
-    if (applications.some((a) => a.driveId === driveId && a.studentId === actingStudentId)) {
+    // Duplicate check across student ID and candidate email
+    const studentIds = new Set([student.id, currentStudentId, actingStudentId].filter(Boolean))
+    if (applications.some((a) => a.driveId === driveId && studentIds.has(a.studentId))) {
       toast.error('Already Applied', { description: 'You have already submitted an application for this drive.' })
       return
     }
@@ -1115,16 +1124,17 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const app: Application = {
       id: uid('a'),
       driveId,
-      studentId: actingStudentId,
+      studentId: student.id,
       status: 'applied',
       appliedAt: today(),
       history: [{ status: 'applied', at: today() }],
     }
     const updated = [...applications, app]
     setApplications(updated)
-    syncToCloud({ applications: updated })
+    syncToCloud({ applications: updated, students })
     notify('company', 'New applicant', `${student.name} applied to ${drive.title}.`)
     toast.success('Application submitted', { description: `${drive.title} — status: Applied` })
+    log(student.name, 'Applied for drive', drive.title)
   }
 
   const setApplicationStatus: PortalState['setApplicationStatus'] = (appId, status, reason) => {
@@ -1713,11 +1723,16 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }
 
   const updateProfile: PortalState['updateProfile'] = (patch) => {
-    const updated = students.map((s) => (s.id === actingStudentId ? { ...s, ...patch } : s))
+    const currentStudentId = authSession?.userId || actingStudentId || 's1'
+    const updated = students.map((s) =>
+      s.id === currentStudentId || s.email?.trim().toLowerCase() === authSession?.email?.trim().toLowerCase()
+        ? { ...s, ...patch }
+        : s,
+    )
     setStudents(updated)
     syncToCloud({ students: updated })
 
-    const student = updated.find((s) => s.id === actingStudentId)
+    const student = updated.find((s) => s.id === currentStudentId || s.email === authSession?.email)
     if (patch.resumeUploaded) {
       notify('admin', 'Resume uploaded', `${student?.name} uploaded a new resume for verification.`)
       toast.success('Resume uploaded', { description: 'Eligibility checks and T&P verifications now include your resume.' })

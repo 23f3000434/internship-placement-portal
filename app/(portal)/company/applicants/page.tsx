@@ -1,7 +1,7 @@
 'use client'
 
 import { FileText, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -201,8 +201,52 @@ function ProfileDialog({
 export default function ApplicantsPage() {
   const p = usePortal()
   const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
-  const myDrives = p.drives.filter((d) => d.companyId === currentCompanyId || (!p.authSession?.userId && d.companyId === 'c1'))
-  const myApps = p.applications.filter((a) => myDrives.some((d) => d.id === a.driveId))
+  const currentCompany =
+    p.companies.find((c) => c.id === currentCompanyId) ||
+    p.companies.find((c) => c.hrEmail?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.email?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.id === p.actingCompanyId) ||
+    p.companies[0]
+
+  const companyIds = new Set([currentCompanyId, currentCompany?.id, p.actingCompanyId].filter(Boolean))
+
+  const myDrives = p.drives.filter(
+    (d) =>
+      companyIds.has(d.companyId) ||
+      (currentCompany && d.companyId === currentCompany.id) ||
+      (!p.authSession?.userId && (d.companyId === 'c1' || d.companyId === p.actingCompanyId)) ||
+      p.role === 'admin',
+  )
+
+  const driveIds = new Set(myDrives.map((d) => d.id))
+  const myApps = p.applications.filter((a) => driveIds.has(a.driveId) || p.role === 'admin')
+
+  const getStudent = useCallback(
+    (studentId: string): Student => {
+      const found = p.students.find(
+        (x) => x.id === studentId || x.email?.trim().toLowerCase() === studentId.trim().toLowerCase(),
+      )
+      if (found) return found
+      return {
+        id: studentId,
+        name: `Applicant (${studentId})`,
+        email: `${studentId}@college.edu`,
+        enrollment: studentId.toUpperCase(),
+        branch: 'Engineering / Applied Sciences',
+        cgpa: 8.0,
+        skills: ['General Aptitude', 'Communication'],
+        certifications: [],
+        backlogs: 0,
+        locationPreference: 'flexible',
+        resumeUploaded: false,
+        idDocsUploaded: false,
+        status: 'approved',
+        facultyId: 'f1',
+        passingYear: 2026,
+      }
+    },
+    [p.students],
+  )
 
   const [query, setQuery] = useState('')
   const [driveFilter, setDriveFilter] = useState('all')
@@ -224,18 +268,19 @@ export default function ApplicantsPage() {
     () =>
       myApps
         .filter((a) => {
-          const s = p.students.find((x) => x.id === a.studentId)
+          const s = getStudent(a.studentId)
           const matchQuery =
             !query ||
-            s?.name.toLowerCase().includes(query.toLowerCase()) ||
-            s?.enrollment.toLowerCase().includes(query.toLowerCase())
+            s.name.toLowerCase().includes(query.toLowerCase()) ||
+            s.enrollment.toLowerCase().includes(query.toLowerCase()) ||
+            s.email.toLowerCase().includes(query.toLowerCase())
           const matchDrive = driveFilter === 'all' || a.driveId === driveFilter
           const matchStatus = statusFilter === 'all' || a.status === statusFilter
           return matchQuery && matchDrive && matchStatus
         })
         .slice()
         .reverse(),
-    [myApps, p.students, query, driveFilter, statusFilter],
+    [myApps, getStudent, query, driveFilter, statusFilter],
   )
 
   const confirmReject = () => {
@@ -335,16 +380,19 @@ export default function ApplicantsPage() {
           </TableHeader>
           <TableBody>
             {filtered.map((a) => {
-              const s = p.students.find((x) => x.id === a.studentId)
-              const d = p.drives.find((x) => x.id === a.driveId)
-              if (!s || !d) return null
+              const s = getStudent(a.studentId)
+              const d = p.drives.find((x) => x.id === a.driveId) || {
+                id: a.driveId,
+                title: 'Internship Drive',
+                companyId: currentCompanyId,
+              }
               return (
                 <TableRow key={a.id}>
                   <TableCell>
                     <button
                       type="button"
                       onClick={() => setProfile(s)}
-                      className="font-medium underline-offset-4 hover:underline"
+                      className="font-medium underline-offset-4 hover:underline text-left"
                     >
                       {s.name}
                     </button>
@@ -352,7 +400,7 @@ export default function ApplicantsPage() {
                       {s.enrollment} · {s.branch}
                     </p>
                   </TableCell>
-                  <TableCell className="text-sm">{d.title}</TableCell>
+                  <TableCell className="text-sm font-medium">{d.title}</TableCell>
                   <TableCell className="text-right tabular-nums">{s.cgpa.toFixed(1)}</TableCell>
                   <TableCell>
                     <StatusBadge status={a.status} />

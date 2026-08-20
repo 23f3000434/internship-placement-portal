@@ -71,9 +71,15 @@ function Timeline({ app }: { app: Application }) {
 
 export default function ApplicationsPage() {
   const p = usePortal()
-  const me = p.students.find((s) => s.id === p.actingStudentId)
+  const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
+  const me =
+    p.students.find((s) => s.id === currentStudentId) ||
+    p.students.find((s) => s.email?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.students.find((s) => s.id === p.actingStudentId) ||
+    p.students[0]
+  const candidateIds = new Set([currentStudentId, me?.id, p.actingStudentId].filter(Boolean))
   const myApps = p.applications
-    .filter((a) => a.studentId === p.actingStudentId)
+    .filter((a) => candidateIds.has(a.studentId))
     .slice()
     .reverse()
 

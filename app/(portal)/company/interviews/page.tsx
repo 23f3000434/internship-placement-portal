@@ -10,8 +10,22 @@ import { usePortal } from '@/lib/store'
 export default function CompanyInterviewsPage() {
   const p = usePortal()
   const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
-  const myDrives = p.drives.filter((d) => d.companyId === currentCompanyId || (!p.authSession?.userId && d.companyId === 'c1'))
-  const myApps = p.applications.filter((a) => myDrives.some((d) => d.id === a.driveId))
+  const currentCompany =
+    p.companies.find((c) => c.id === currentCompanyId) ||
+    p.companies.find((c) => c.hrEmail?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.email?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.id === p.actingCompanyId) ||
+    p.companies[0]
+  const companyIds = new Set([currentCompanyId, currentCompany?.id, p.actingCompanyId].filter(Boolean))
+  const myDrives = p.drives.filter(
+    (d) =>
+      companyIds.has(d.companyId) ||
+      (currentCompany && d.companyId === currentCompany.id) ||
+      (!p.authSession?.userId && (d.companyId === 'c1' || d.companyId === p.actingCompanyId)) ||
+      p.role === 'admin',
+  )
+  const driveIds = new Set(myDrives.map((d) => d.id))
+  const myApps = p.applications.filter((a) => driveIds.has(a.driveId) || p.role === 'admin')
   const myInterviews = p.interviews
     .filter((i) => myApps.some((a) => a.id === i.applicationId))
     .slice()

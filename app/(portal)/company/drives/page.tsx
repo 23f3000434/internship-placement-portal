@@ -41,9 +41,19 @@ import { toast } from 'sonner'
 export default function CompanyDrivesPage() {
   const p = usePortal()
   const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
-  const me = p.companies.find((c) => c.id === currentCompanyId) || p.companies[0]
+  const me =
+    p.companies.find((c) => c.id === currentCompanyId) ||
+    p.companies.find((c) => c.hrEmail?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.email?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.id === p.actingCompanyId) ||
+    p.companies[0]
+  const companyIds = new Set([currentCompanyId, me?.id, p.actingCompanyId].filter(Boolean))
   const myDrives = p.drives.filter(
-    (d) => d.companyId === currentCompanyId || (!p.authSession?.userId && d.companyId === 'c1'),
+    (d) =>
+      companyIds.has(d.companyId) ||
+      (me && d.companyId === me.id) ||
+      (!p.authSession?.userId && (d.companyId === 'c1' || d.companyId === p.actingCompanyId)) ||
+      p.role === 'admin',
   )
   const appsFor = (driveId: string) => p.applications.filter((a) => a.driveId === driveId)
   const [tab, setTab] = useState('all')

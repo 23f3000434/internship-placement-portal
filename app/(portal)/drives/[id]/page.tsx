@@ -48,7 +48,13 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
   const drive = p.drives.find((d) => d.id === id)
   const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
   const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
-  const me = p.role === 'student' ? p.students.find((s) => s.id === currentStudentId) || p.students[0] : null
+  const me =
+    p.role === 'student'
+      ? p.students.find((s) => s.id === currentStudentId) ||
+        p.students.find((s) => s.email?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+        p.students.find((s) => s.id === p.actingStudentId) ||
+        p.students[0]
+      : null
 
   // Edit Modal State
   const [editOpen, setEditOpen] = useState(false)
@@ -85,12 +91,19 @@ export default function DriveDetailPage({ params }: { params: Promise<{ id: stri
 
   const lifecycleStatus = getDriveStatus(drive, p.applications)
   const company = p.companies.find((c) => c.id === drive.companyId)
-  const isOwner = (p.role === 'company' && drive.companyId === currentCompanyId) || p.role === 'admin'
+  const isOwner =
+    (p.role === 'company' &&
+      (drive.companyId === currentCompanyId ||
+        drive.companyId === p.actingCompanyId ||
+        company?.hrEmail === p.authSession?.email ||
+        company?.email === p.authSession?.email)) ||
+    p.role === 'admin'
   const backHref = p.role === 'company' ? '/company/drives' : '/drives'
   const backLabel = p.role === 'company' ? 'Back to my drives' : 'Back to drives'
   const elig = me ? checkEligibility(me, drive) : null
+  const candidateIds = new Set([currentStudentId, me?.id, p.actingStudentId].filter(Boolean))
   const existingApp = me
-    ? p.applications.find((a) => a.driveId === drive.id && a.studentId === me.id)
+    ? p.applications.find((a) => a.driveId === drive.id && candidateIds.has(a.studentId))
     : null
   const canApply = elig?.state === 'eligible' && !existingApp && lifecycleStatus === 'open'
 

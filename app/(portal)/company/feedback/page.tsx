@@ -278,7 +278,16 @@ function InternCard({ internship }: { internship: Internship }) {
 export default function CompanyFeedbackPage() {
   const p = usePortal()
   const currentCompanyId = p.authSession?.userId || p.actingCompanyId || 'c1'
-  const myInterns = p.internships.filter((n) => n.companyId === currentCompanyId || (!p.authSession?.userId && n.companyId === 'c1'))
+  const currentCompany =
+    p.companies.find((c) => c.id === currentCompanyId) ||
+    p.companies.find((c) => c.hrEmail?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.email?.trim().toLowerCase() === p.authSession?.email?.trim().toLowerCase()) ||
+    p.companies.find((c) => c.id === p.actingCompanyId) ||
+    p.companies[0]
+  const companyIds = new Set([currentCompanyId, currentCompany?.id, p.actingCompanyId].filter(Boolean))
+  const myInterns = p.internships.filter(
+    (n) => companyIds.has(n.companyId) || (!p.authSession?.userId && (n.companyId === 'c1' || n.companyId === p.actingCompanyId)),
+  )
 
   return (
     <>
