@@ -230,9 +230,33 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   // Portal persistence: local cache + Supabase cloud synchronization across all devices
   const [hydrated, setHydrated] = useState(false)
 
+  const dedupeStudents = useCallback((list: Student[]): Student[] => {
+    const seen = new Set<string>()
+    const out: Student[] = []
+    for (const s of list) {
+      const em = (s.email || '').trim().toLowerCase()
+      if (!em || seen.has(em)) continue
+      seen.add(em)
+      out.push(s)
+    }
+    return out
+  }, [])
+
+  const dedupeCompanies = useCallback((list: Company[]): Company[] => {
+    const seen = new Set<string>()
+    const out: Company[] = []
+    for (const c of list) {
+      const em = (c.hrEmail || c.email || '').trim().toLowerCase()
+      if (!em || seen.has(em)) continue
+      seen.add(em)
+      out.push(c)
+    }
+    return out
+  }, [])
+
   const applyRemoteState = useCallback((s: Record<string, unknown>) => {
-    if (Array.isArray(s.students) && s.students.length > 0) setStudents(s.students as Student[])
-    if (Array.isArray(s.companies) && s.companies.length > 0) setCompanies(s.companies as Company[])
+    if (Array.isArray(s.students) && s.students.length > 0) setStudents(dedupeStudents(s.students as Student[]))
+    if (Array.isArray(s.companies) && s.companies.length > 0) setCompanies(dedupeCompanies(s.companies as Company[]))
     if (Array.isArray(s.faculty) && s.faculty.length > 0) setFacultyList(s.faculty as Faculty[])
     if (Array.isArray(s.drives) && s.drives.length > 0) setDrives(s.drives as Drive[])
     if (Array.isArray(s.applications)) setApplications(s.applications as Application[])
@@ -250,7 +274,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     if (Array.isArray(s.notifications)) setNotifications(s.notifications as Notification[])
     if (Array.isArray(s.audit)) setAudit(s.audit as AuditEntry[])
     if (typeof s.uid === 'number') uidCounter = Math.max(uidCounter, s.uid)
-  }, [])
+  }, [dedupeStudents, dedupeCompanies])
 
   // 1. Initial hydration: localStorage for 0ms startup, then fetch from Supabase
   useEffect(() => {
@@ -506,27 +530,29 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     const localMatch = matchUser(students, companies, facultyList)
     if (localMatch) return localMatch
 
-    // Step 2: If not found in local state, query Supabase Cloud live for multi-device sync
+    // Step 2: If not found in local state, query /api/portal/sync for multi-device sync
     try {
-      const { data, error } = await supabase
-        .from('portal_data')
-        .select('state')
-        .eq('id', 'main_v1')
-        .single()
-
-      if (!error && data?.state) {
-        const remoteState = data.state as Record<string, unknown>
+      const res = await fetch('/api/portal/sync', { cache: 'no-store' })
+      const json = await res.json()
+      if (json.synced && json.state) {
+        const remoteState = json.state as Record<string, unknown>
         applyRemoteState(remoteState)
 
-        const remoteStudents = Array.isArray(remoteState.students) ? (remoteState.students as Student[]) : students
-        const remoteCompanies = Array.isArray(remoteState.companies) ? (remoteState.companies as Company[]) : companies
-        const remoteFaculty = Array.isArray(remoteState.faculty) ? (remoteState.faculty as Faculty[]) : facultyList
+        const remoteStudents = Array.isArray(remoteState.students)
+          ? dedupeStudents(remoteState.students as Student[])
+          : students
+        const remoteCompanies = Array.isArray(remoteState.companies)
+          ? dedupeCompanies(remoteState.companies as Company[])
+          : companies
+        const remoteFaculty = Array.isArray(remoteState.faculty)
+          ? (remoteState.faculty as Faculty[])
+          : facultyList
 
         const cloudMatch = matchUser(remoteStudents, remoteCompanies, remoteFaculty)
         if (cloudMatch) return cloudMatch
       }
     } catch {
-      // offline
+      // offline fallback
     }
 
     return { success: false, error: 'No account registered with this email. Please check your spelling or register.' }
@@ -606,59 +632,26 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       facultyId: 'f1',
     }
 
-    // Fetch latest remote students to avoid overwriting concurrent registrations
-    let baseStudents = students
-    let baseCompanies = companies
-    let baseFaculty = facultyList
-
-    try {
-      const { data } = await supabase.from('portal_data').select('state').eq('id', 'main_v1').single()
-      if (data?.state) {
-        const r = data.state as Record<string, unknown>
-        if (Array.isArray(r.students) && r.students.length > 0) baseStudents = r.students as Student[]
-        if (Array.isArray(r.companies) && r.companies.length > 0) baseCompanies = r.companies as Company[]
-        if (Array.isArray(r.faculty) && r.faculty.length > 0) baseFaculty = r.faculty as Faculty[]
-      }
-    } catch {}
-
-    const nextStudents = [...baseStudents.filter((st) => st.email.toLowerCase() !== cleanStudent.email), cleanStudent]
+    // 1. Deduplicate and update local state immediately
+    const nextStudents = dedupeStudents([
+      ...students.filter((st) => st.email.trim().toLowerCase() !== cleanStudent.email),
+      cleanStudent,
+    ])
     setStudents(nextStudents)
 
-    const payload = {
-      students: nextStudents,
-      companies: baseCompanies,
-      faculty: baseFaculty,
-      drives,
-      applications,
-      interviews,
-      internships,
-      documents,
-      weeklyReports,
-      attendance,
-      milestones,
-      feedback,
-      selfPlacements,
-      achievements,
-      threads,
-      messages,
-      notifications,
-      audit,
-      uid: uidCounter,
-    }
-
+    // 2. Post atomic registration to server API
     try {
-      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(payload))
-    } catch {}
-
-    // Await save to Supabase Cloud before completing registration
-    try {
-      await supabase.from('portal_data').upsert({
-        id: 'main_v1',
-        state: payload,
-        updated_at: new Date().toISOString(),
+      const res = await fetch('/api/portal/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register_student', student: cleanStudent }),
       })
+      const data = await res.json()
+      if (data.students && Array.isArray(data.students)) {
+        setStudents(dedupeStudents(data.students as Student[]))
+      }
     } catch (err) {
-      console.error('Supabase registration sync error:', err)
+      console.error('Registration server sync error:', err)
     }
 
     notify('admin', 'New student registration', `${cleanStudent.name} submitted documents for verification.`)
@@ -677,57 +670,24 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       status: 'pending',
     }
 
-    let baseStudents = students
-    let baseCompanies = companies
-    let baseFaculty = facultyList
-
-    try {
-      const { data } = await supabase.from('portal_data').select('state').eq('id', 'main_v1').single()
-      if (data?.state) {
-        const r = data.state as Record<string, unknown>
-        if (Array.isArray(r.students) && r.students.length > 0) baseStudents = r.students as Student[]
-        if (Array.isArray(r.companies) && r.companies.length > 0) baseCompanies = r.companies as Company[]
-        if (Array.isArray(r.faculty) && r.faculty.length > 0) baseFaculty = r.faculty as Faculty[]
-      }
-    } catch {}
-
-    const nextCompanies = [...baseCompanies.filter((co) => co.hrEmail.toLowerCase() !== cleanCompany.hrEmail), cleanCompany]
+    const nextCompanies = dedupeCompanies([
+      ...companies.filter((co) => co.hrEmail.trim().toLowerCase() !== cleanCompany.hrEmail),
+      cleanCompany,
+    ])
     setCompanies(nextCompanies)
 
-    const payload = {
-      students: baseStudents,
-      companies: nextCompanies,
-      faculty: baseFaculty,
-      drives,
-      applications,
-      interviews,
-      internships,
-      documents,
-      weeklyReports,
-      attendance,
-      milestones,
-      feedback,
-      selfPlacements,
-      achievements,
-      threads,
-      messages,
-      notifications,
-      audit,
-      uid: uidCounter,
-    }
-
     try {
-      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(payload))
-    } catch {}
-
-    try {
-      await supabase.from('portal_data').upsert({
-        id: 'main_v1',
-        state: payload,
-        updated_at: new Date().toISOString(),
+      const res = await fetch('/api/portal/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register_company', company: cleanCompany }),
       })
+      const data = await res.json()
+      if (data.companies && Array.isArray(data.companies)) {
+        setCompanies(dedupeCompanies(data.companies as Company[]))
+      }
     } catch (err) {
-      console.error('Supabase company registration sync error:', err)
+      console.error('Company registration sync error:', err)
     }
 
     notify('admin', 'New company registration', `${cleanCompany.name} submitted registration for verification.`)
