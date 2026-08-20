@@ -114,6 +114,7 @@ export type StudentProfilePatch = Partial<
 >
 
 interface PortalState {
+  hydrated: boolean
   authSession: AuthSession | null
   login: (email: string, pass: string, targetRole?: Role) => { success: boolean; error?: string }
   quickLogin: (role: Role, personaId?: string) => void
@@ -202,16 +203,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>('student')
   const [actingStudentId, setActingStudentId] = useState('s2')
   const [actingCompanyId, setActingCompanyId] = useState('c1')
-  const actingFacultyId = 'f1'
+  const [actingFacultyId, setActingFacultyId] = useState('f1')
 
-  const [authSession, setAuthSession] = useState<AuthSession | null>(() => ({
-    userId: 's2',
-    name: 'Priya Patel',
-    email: 'priya.patel@college.edu',
-    role: 'student',
-    token: 'tok_demo_s2',
-    signedInAt: today(),
-  }))
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null)
 
   const [students, setStudents] = useState(seedStudents)
   const [companies, setCompanies] = useState(seedCompanies)
@@ -1164,6 +1158,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<PortalState>(
     () => ({
+      hydrated,
       authSession,
       login,
       quickLogin,

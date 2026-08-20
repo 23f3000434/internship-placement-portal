@@ -28,7 +28,7 @@ import {
   UserRound,
   Users,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -239,6 +239,20 @@ function AuthRequired() {
 function UserProfileCard() {
   const { role, authSession, students, companies, actingStudentId, actingCompanyId } = usePortal()
 
+  if (!authSession) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg border bg-card p-3 shadow-2xs">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-foreground">Guest Visitor</p>
+          <p className="text-[11px] text-muted-foreground">Sign in required</p>
+        </div>
+        <Button size="sm" className="h-7 text-xs px-2.5" render={<Link href="/signin" />}>
+          Sign in
+        </Button>
+      </div>
+    )
+  }
+
   const s = students.find((x) => x.id === (authSession?.userId || actingStudentId))
   const c = companies.find((x) => x.id === (authSession?.userId || actingCompanyId))
 
@@ -321,20 +335,30 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function PortalShell({ children }: { children: React.ReactNode }) {
-  const { role, authSession, logout, notifications, students, companies, actingStudentId, actingCompanyId } = usePortal()
+  const { role, authSession, hydrated, logout, notifications, students, companies, actingStudentId, actingCompanyId } = usePortal()
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
   const unread = notifications.filter((n) => n.forRole === role && !n.read).length
   const permitted = allowedRoles(pathname).includes(role)
 
+  // When unauthenticated, redirect to sign-in page once hydrated
+  useEffect(() => {
+    if (hydrated && !authSession) {
+      router.push('/signin')
+    }
+  }, [hydrated, authSession, router])
+
   const personaName =
-    role === 'student'
-      ? students.find((s) => s.id === actingStudentId)?.name
-      : role === 'company'
-        ? companies.find((c) => c.id === actingCompanyId)?.name
-        : role === 'faculty'
-          ? 'Prof. R. Kulkarni'
-          : 'T&P Cell Admin'
+    !authSession
+      ? 'Guest'
+      : role === 'student'
+        ? students.find((s) => s.id === actingStudentId)?.name
+        : role === 'company'
+          ? companies.find((c) => c.id === actingCompanyId)?.name
+          : role === 'faculty'
+            ? 'Prof. R. Kulkarni'
+            : 'T&P Cell Admin'
 
   return (
     <div className="flex min-h-svh">
