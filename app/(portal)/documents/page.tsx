@@ -51,6 +51,7 @@ export default function DocumentsPage() {
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null)
   const [viewDoc, setViewDoc] = useState<InternshipDocument | null>(null)
   const [verifyModalDoc, setVerifyModalDoc] = useState<InternshipDocument | null>(null)
+  const [selectedInternshipId, setSelectedInternshipId] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const currentStudentId = p.authSession?.userId || p.actingStudentId || 's1'
@@ -58,19 +59,22 @@ export default function DocumentsPage() {
   const currentFacultyId = p.authSession?.userId || p.actingFacultyId || 'f1'
   const student = p.students.find((s) => s.id === currentStudentId) || p.students[0]
 
+  const facultyMentees = p.students.filter(
+    (s) => s.facultyId === currentFacultyId || (!p.authSession?.userId && s.facultyId === 'f1') || p.role === 'admin',
+  )
+  const facultyMenteeIds = new Set(facultyMentees.map((s) => s.id))
+
   const internships =
     p.role === 'student'
       ? p.internships.filter((n) => n.studentId === currentStudentId)
       : p.role === 'company'
         ? p.internships.filter((n) => n.companyId === currentCompanyId)
         : p.role === 'faculty'
-          ? p.internships.filter((n) => {
-              const s = p.students.find((x) => x.id === n.studentId)
-              return s?.facultyId === currentFacultyId
-            })
+          ? p.internships.filter((n) => facultyMenteeIds.has(n.studentId))
           : p.internships
 
   const ids = new Set(internships.map((n) => n.id))
+
   // Filter docs for current role/student
   const studentDocs =
     p.role === 'admin'
@@ -79,6 +83,7 @@ export default function DocumentsPage() {
         ? p.documents.filter(
             (d) =>
               ids.has(d.internshipId) ||
+              d.internshipId.includes(currentStudentId) ||
               d.internshipId.includes(p.actingStudentId) ||
               d.internshipId === 'general',
           )
@@ -86,8 +91,12 @@ export default function DocumentsPage() {
           ? p.documents.filter((d) => {
               if (ids.has(d.internshipId)) return true
               const internship = p.internships.find((n) => n.id === d.internshipId)
-              const s = internship ? p.students.find((x) => x.id === internship.studentId) : null
-              return s?.facultyId === p.actingFacultyId
+              if (internship && facultyMenteeIds.has(internship.studentId)) return true
+              if (d.internshipId.startsWith('intern_')) {
+                const sId = d.internshipId.replace('intern_', '')
+                return facultyMenteeIds.has(sId)
+              }
+              return false
             })
           : p.documents.filter((d) => ids.has(d.internshipId))
 
@@ -106,7 +115,7 @@ export default function DocumentsPage() {
     if (file) {
       const check = await validateUploadedFile(file, ['pdf', 'image'])
       if (!check.valid) {
-        toast.error('File Upload Blocked', { description: check.error || 'Invalid file format or signature.' })
+        toast.error('File Upload Blocked', { description: check.error || check.reason || 'Invalid file format or signature.' })
         e.target.value = ''
         setSelectedFile(null)
         setFileDataUrl(null)
@@ -136,7 +145,8 @@ export default function DocumentsPage() {
       return
     }
 
-    const internshipId = internships[0]?.id || `intern_${p.actingStudentId}`
+    const defaultTrackId = internships[0]?.id || `intern_${student.id}`
+    const internshipId = selectedInternshipId || defaultTrackId
     const defaultExtName = uploadMode === 'link' ? `${selectedKind}-gdrive-doc` : `${selectedKind}-${Date.now()}.pdf`
     const fileName = customDocTitle.trim() || selectedFile?.name || defaultExtName
 
@@ -158,6 +168,7 @@ export default function DocumentsPage() {
     setFileDataUrl(null)
     setFileUrlInput('')
     setCustomDocTitle('')
+    setSelectedInternshipId('')
   }
 
   return (
@@ -201,63 +212,87 @@ export default function DocumentsPage() {
           <div className="divide-y rounded-lg border">
             {studentDocs
               .filter((d) => d.status !== 'not_uploaded')
-              .map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
-                      <FileText className="size-5" />
+              .map((doc) => {
+                const linkedInternship = p.internships.find((n) => n.id === doc.internshipId)
+                const linkedStudent =
+                  p.students.find(
+                    (s) =>
+                      s.id === linkedInternship?.studentId ||
+                      (doc.internshipId.startsWith('intern_')
+                        ? doc.internshipId.replace('intern_', '')
+                        : null),
+                  ) || (p.role === 'student' ? student : null)
+
+                return (
+                  <div
+                    key={doc.id}
+                    className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
+                        <FileText className="size-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <p className="text-sm font-medium leading-none">
+                            {documentLabel[doc.kind] || doc.fileName}
+                          </p>
+                          {linkedStudent && (
+                            <span className="text-[10px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                              {linkedStudent.name} ({linkedStudent.enrollment})
+                            </span>
+                          )}
+                          {linkedInternship && (
+                            <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                              {linkedInternship.role}
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {doc.fileName} · Uploaded {doc.uploadedAt} by {doc.uploadedBy}
+                        </p>
+                        {doc.rejectReason && (
+                          <p className="text-xs text-destructive mt-1">Rejection reason: {doc.rejectReason}</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium leading-none mb-1">
-                        {documentLabel[doc.kind] || doc.fileName}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {doc.fileName} · Uploaded {doc.uploadedAt} by {doc.uploadedBy}
-                      </p>
-                      {doc.rejectReason && (
-                        <p className="text-xs text-destructive mt-1">Rejection reason: {doc.rejectReason}</p>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    <StatusBadge status={doc.status} />
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <StatusBadge status={doc.status} />
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setViewDoc(doc)}
-                      className="text-xs"
-                    >
-                      <Eye className="mr-1 size-3.5" /> View
-                    </Button>
-
-                    {doc.verifyCode && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setVerifyModalDoc(doc)}
+                        onClick={() => setViewDoc(doc)}
                         className="text-xs"
                       >
-                        <QrCode className="mr-1 size-3.5" /> Verify Code
+                        <Eye className="mr-1 size-3.5" /> View
                       </Button>
-                    )}
 
-                    {p.role === 'admin' && doc.status === 'uploaded' && (
-                      <Button
-                        size="sm"
-                        onClick={() => p.setDocumentStatus(doc.id, 'verified')}
-                        className="text-xs"
-                      >
-                        <CheckCircle2 className="mr-1 size-3.5" /> Verify
-                      </Button>
-                    )}
+                      {doc.verifyCode && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setVerifyModalDoc(doc)}
+                          className="text-xs"
+                        >
+                          <QrCode className="mr-1 size-3.5" /> Verify Code
+                        </Button>
+                      )}
+
+                      {p.role === 'admin' && doc.status === 'uploaded' && (
+                        <Button
+                          size="sm"
+                          onClick={() => p.setDocumentStatus(doc.id, 'verified')}
+                          className="text-xs"
+                        >
+                          <CheckCircle2 className="mr-1 size-3.5" /> Verify
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
           </div>
         </section>
       )}
@@ -302,6 +337,37 @@ export default function DocumentsPage() {
           </DialogHeader>
 
           <div className="flex flex-col gap-4 py-2">
+            {/* Student / Track Selector (shown if not a student, or if multiple tracks exist) */}
+            {(p.role !== 'student' || internships.length > 1) && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="internshipSelect">Associate with Student / Track</Label>
+                <Select
+                  value={selectedInternshipId || (internships[0]?.id ?? `intern_${student.id}`)}
+                  onValueChange={(v) => setSelectedInternshipId(v ?? '')}
+                >
+                  <SelectTrigger id="internshipSelect" className="w-full text-xs">
+                    <SelectValue placeholder="Choose student / internship track" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {internships.map((n) => {
+                      const s = p.students.find((x) => x.id === n.studentId)
+                      const c = p.companies.find((x) => x.id === n.companyId)
+                      return (
+                        <SelectItem key={n.id} value={n.id} className="text-xs">
+                          {s?.name || 'Student'} ({s?.enrollment || n.studentId}) — {n.role} ({c?.name || 'Organization'})
+                        </SelectItem>
+                      )
+                    })}
+                    {facultyMentees.map((s) => (
+                      <SelectItem key={`intern_${s.id}`} value={`intern_${s.id}`} className="text-xs">
+                        {s.name} ({s.enrollment}) — General Student Dossier
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="flex flex-col gap-2">
               <Label htmlFor="docKind">Document Category</Label>
               <Select

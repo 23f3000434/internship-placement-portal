@@ -6,7 +6,9 @@
 
 export interface ValidationResult {
   valid: boolean
+  ok: boolean
   error?: string
+  reason?: string
 }
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25MB
@@ -16,23 +18,31 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25MB
  */
 export async function validateUploadedFile(
   file: File,
-  allowedKinds: ('pdf' | 'image' | 'doc')[] = ['pdf', 'image', 'doc'],
+  allowedKinds: ('pdf' | 'image' | 'doc' | string)[] = ['pdf', 'image', 'doc'],
   maxSize: number = MAX_FILE_SIZE,
 ): Promise<ValidationResult> {
   if (!file) {
-    return { valid: false, error: 'No file selected.' }
+    return { valid: false, ok: false, error: 'No file selected.', reason: 'No file selected.' }
   }
 
   if (file.size > maxSize) {
-    return {
-      valid: false,
-      error: `File size (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds ${Math.round(maxSize / (1024 * 1024))} MB limit. Please upload to Google Drive and paste the link instead.`,
-    }
+    const msg = `File size (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds ${Math.round(maxSize / (1024 * 1024))} MB limit. Please upload to Google Drive and paste the link instead.`
+    return { valid: false, ok: false, error: msg, reason: msg }
   }
 
   if (file.size === 0) {
-    return { valid: false, error: 'The selected file is empty (0 bytes).' }
+    return { valid: false, ok: false, error: 'The selected file is empty (0 bytes).', reason: 'The selected file is empty (0 bytes).' }
   }
+
+  // Normalize allowed kinds if full MIME types were passed
+  const normalizedKinds = new Set<string>()
+  for (const k of allowedKinds) {
+    if (k === 'pdf' || k.includes('pdf')) normalizedKinds.add('pdf')
+    else if (k === 'image' || k.startsWith('image/')) normalizedKinds.add('image')
+    else if (k === 'doc' || k.includes('word') || k.includes('document') || k.includes('text')) normalizedKinds.add('doc')
+    else normalizedKinds.add(k)
+  }
+  const kindsArray = Array.from(normalizedKinds)
 
   const name = file.name.toLowerCase()
   const ext = name.split('.').pop() || ''
@@ -44,25 +54,24 @@ export async function validateUploadedFile(
     doc: ['doc', 'docx', 'txt', 'rtf'],
   }
 
-  const validExts = allowedKinds.flatMap((kind) => allowedExtensions[kind] || [])
+  const validExts = kindsArray.flatMap((kind) => allowedExtensions[kind] || [])
   if (ext && !validExts.includes(ext) && file.type) {
     // If extension is uncommon but MIME type matches, allow
     const isMimeAllowed =
-      (allowedKinds.includes('pdf') && file.type.includes('pdf')) ||
-      (allowedKinds.includes('image') && file.type.startsWith('image/')) ||
-      (allowedKinds.includes('doc') && (file.type.includes('word') || file.type.includes('document') || file.type.includes('text')))
+      (kindsArray.includes('pdf') && file.type.includes('pdf')) ||
+      (kindsArray.includes('image') && file.type.startsWith('image/')) ||
+      (kindsArray.includes('doc') && (file.type.includes('word') || file.type.includes('document') || file.type.includes('text')))
     if (!isMimeAllowed) {
-      return {
-        valid: false,
-        error: `File format .${ext} is not supported. Please upload a PDF, Image, or paste a Google Drive link.`,
-      }
+      const msg = `File format .${ext} is not supported. Please upload a PDF, Image, or paste a Google Drive link.`
+      return { valid: false, ok: false, error: msg, reason: msg }
     }
   }
 
   // 2. Reject executable / script extensions
   const dangerous = ['html', 'htm', 'js', 'mjs', 'php', 'exe', 'sh', 'bat', 'cmd', 'svg', 'vbs', 'ps1', 'jar']
   if (dangerous.some((d) => name.endsWith(`.${d}`) || name.includes(`.${d}.`))) {
-    return { valid: false, error: 'Executable, script, and HTML file types are strictly prohibited for security.' }
+    const msg = 'Executable, script, and HTML file types are strictly prohibited for security.'
+    return { valid: false, ok: false, error: msg, reason: msg }
   }
 
   // 3. Magic Bytes / Header Inspection
@@ -78,10 +87,8 @@ export async function validateUploadedFile(
       headerText.includes('<?php') ||
       headerText.includes('<!doctype html')
     ) {
-      return {
-        valid: false,
-        error: 'Unsafe HTML or script content detected in file. Please upload an authentic document or Google Drive link.',
-      }
+      const msg = 'Unsafe HTML or script content detected in file. Please upload an authentic document or Google Drive link.'
+      return { valid: false, ok: false, error: msg, reason: msg }
     }
 
     // PDF Magic Bytes: %PDF- (0x25 0x50 0x44 0x2D) anywhere in first 1024 bytes (per PDF standard)
@@ -95,17 +102,15 @@ export async function validateUploadedFile(
       }
       // If header not found in slice but MIME type and extension are PDF, allow gracefully
       if (!foundPdfHeader && ext !== 'pdf') {
-        return {
-          valid: false,
-          error: 'File signature does not match authentic PDF format. Please verify the file or upload to Google Drive.',
-        }
+        const msg = 'File signature does not match authentic PDF format. Please verify the file or upload to Google Drive.'
+        return { valid: false, ok: false, error: msg, reason: msg }
       }
     }
 
-    return { valid: true }
+    return { valid: true, ok: true }
   } catch {
     // If browser arrayBuffer inspection encounters an issue, permit if extension is valid
-    return { valid: true }
+    return { valid: true, ok: true }
   }
 }
 
@@ -117,20 +122,20 @@ export function validateDataUrlSignature(
   allowedKinds: ('pdf' | 'image' | 'doc')[] = ['pdf', 'image', 'doc'],
 ): ValidationResult {
   if (!dataUrl || typeof dataUrl !== 'string') {
-    return { valid: false, error: 'Missing or invalid data string.' }
+    return { valid: false, ok: false, error: 'Missing or invalid data string.', reason: 'Missing or invalid data string.' }
   }
 
   if (allowedKinds.includes('pdf') && dataUrl.includes('data:application/pdf')) {
-    return { valid: true }
+    return { valid: true, ok: true }
   }
 
   if (allowedKinds.includes('image') && dataUrl.startsWith('data:image/')) {
-    return { valid: true }
+    return { valid: true, ok: true }
   }
 
   if (allowedKinds.includes('doc') && (dataUrl.includes('data:application/') || dataUrl.includes('data:text/'))) {
-    return { valid: true }
+    return { valid: true, ok: true }
   }
 
-  return { valid: true }
+  return { valid: true, ok: true }
 }

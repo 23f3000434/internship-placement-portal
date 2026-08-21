@@ -40,9 +40,9 @@ function UploadToggle({
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) {
-      const validation = await validateUploadedFile(f, ['application/pdf', 'image/png', 'image/jpeg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
-      if (!validation.ok) {
-        toast.error('File Upload Blocked', { description: validation.reason })
+      const validation = await validateUploadedFile(f, ['pdf', 'image', 'doc'])
+      if (!validation.valid) {
+        toast.error('File Upload Blocked', { description: validation.error || validation.reason || 'Invalid file format.' })
         e.target.value = ''
         onChange({ uploaded: false })
         return
