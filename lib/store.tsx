@@ -574,6 +574,68 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     toast.success(`Email sent to ${to}`, { description: subject })
   }, [])
 
+  const persistSession = useCallback((sess: AuthSession | null, targetRole: Role, extra?: Record<string, unknown>) => {
+    try {
+      const raw = localStorage.getItem(SNAPSHOT_KEY) || sessionStorage.getItem(SNAPSHOT_KEY)
+      let stateObj: Record<string, unknown> = {
+        students,
+        companies,
+        faculty: facultyList,
+        drives,
+        applications,
+        interviews,
+        internships,
+        documents,
+        weeklyReports,
+        attendance,
+        milestones,
+        feedback,
+        selfPlacements,
+        achievements,
+        threads,
+        messages,
+        notifications,
+        audit,
+        uid: uidCounter,
+      }
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw)
+          if (parsed && typeof parsed === 'object') {
+            stateObj = { ...stateObj, ...parsed }
+          }
+        } catch {}
+      }
+      const updated = JSON.stringify({
+        ...stateObj,
+        authSession: sess,
+        role: targetRole,
+        ...extra,
+      })
+      localStorage.setItem(SNAPSHOT_KEY, updated)
+      sessionStorage.setItem(SNAPSHOT_KEY, updated)
+    } catch {}
+  }, [
+    students,
+    companies,
+    facultyList,
+    drives,
+    applications,
+    interviews,
+    internships,
+    documents,
+    weeklyReports,
+    attendance,
+    milestones,
+    feedback,
+    selfPlacements,
+    achievements,
+    threads,
+    messages,
+    notifications,
+    audit,
+  ])
+
   const login: PortalState['login'] = async (email, pass) => {
     const cleanEmail = (email || '').trim().toLowerCase()
     const cleanPass = (pass || '').trim()
@@ -583,49 +645,6 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     }
     if (!cleanPass) {
       return { success: false, error: 'Please enter your password.' }
-    }
-
-    const persistSession = (sess: AuthSession | null, targetRole: Role, extra?: Record<string, unknown>) => {
-      try {
-        const raw = localStorage.getItem(SNAPSHOT_KEY) || sessionStorage.getItem(SNAPSHOT_KEY)
-        let stateObj: Record<string, unknown> = {
-          students,
-          companies,
-          faculty: facultyList,
-          drives,
-          applications,
-          interviews,
-          internships,
-          documents,
-          weeklyReports,
-          attendance,
-          milestones,
-          feedback,
-          selfPlacements,
-          achievements,
-          threads,
-          messages,
-          notifications,
-          audit,
-          uid: uidCounter,
-        }
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw)
-            if (parsed && typeof parsed === 'object') {
-              stateObj = { ...stateObj, ...parsed }
-            }
-          } catch {}
-        }
-        const updated = JSON.stringify({
-          ...stateObj,
-          authSession: sess,
-          role: targetRole,
-          ...extra,
-        })
-        localStorage.setItem(SNAPSHOT_KEY, updated)
-        sessionStorage.setItem(SNAPSHOT_KEY, updated)
-      } catch {}
     }
 
     const matchUser = (

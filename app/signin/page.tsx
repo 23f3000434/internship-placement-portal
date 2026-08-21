@@ -158,14 +158,9 @@ export default function SignInPage() {
               <span className="text-[11px] text-muted-foreground">Faculty Mentor</span>
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => handleQuickAccess('admin')}
-            className="mt-2 w-full flex items-center justify-between rounded-lg border border-foreground/20 bg-muted/60 p-2.5 text-xs text-left font-medium hover:bg-muted transition"
-          >
-            <span>🏛️ Sign in as <strong>T&amp;P Cell Admin (Full Access)</strong></span>
-            <ArrowRight className="size-3.5" />
-          </button>
+          <div className="mt-3 rounded-lg border border-dashed bg-muted/30 p-2.5 text-center text-[11px] text-muted-foreground">
+            🔒 Institutional T&amp;P Admin sign-in requires credentials (<code className="font-semibold text-foreground">admin@college.edu</code>).
+          </div>
         </div>
 
         {/* Links */}
