@@ -186,6 +186,8 @@ export type DocumentStatus = 'not_uploaded' | 'uploaded' | 'verified' | 'rejecte
 export interface InternshipDocument {
   id: string
   internshipId: string
+  studentId?: string
+  studentName?: string
   kind: DocumentKind
   fileName?: string
   fileData?: string

@@ -495,24 +495,20 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     lastKnownStateJsonRef.current = JSON.stringify(payload)
 
     try {
-      const localSnapshot = JSON.stringify(
-        {
-          authSession,
-          role,
-          actingStudentId,
-          actingCompanyId,
-          ...payload,
-        },
-        (_key, value) => {
-          if (typeof value === 'string' && value.startsWith('data:') && value.length > 25000) {
-            return value.slice(0, 500) + '...[offline_cached]'
-          }
-          return value
-        },
-      )
+      const localSnapshot = JSON.stringify({
+        authSession,
+        role,
+        actingStudentId,
+        actingCompanyId,
+        ...payload,
+      })
       localStorage.setItem(SNAPSHOT_KEY, localSnapshot)
       sessionStorage.setItem(SNAPSHOT_KEY, localSnapshot)
-    } catch {}
+    } catch {
+      try {
+        sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ authSession, role, actingStudentId, actingCompanyId, ...payload }))
+      } catch {}
+    }
 
     // Notify other tabs via BroadcastChannel (zero network cost)
     try {
@@ -1401,11 +1397,32 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     fileSize,
     fileUrl,
   ) => {
+    const currentStudentId = authSession?.userId || actingStudentId || 's1'
+    const currentStudent =
+      students.find((s) => s.id === currentStudentId) ||
+      students.find((s) => s.email?.trim().toLowerCase() === authSession?.email?.trim().toLowerCase()) ||
+      students[0]
+
+    let targetStudentId = currentStudent?.id || currentStudentId
+    let targetStudentName = currentStudent?.name
+    const matchedInternship = internships.find((n) => n.id === internshipId)
+    if (matchedInternship) {
+      targetStudentId = matchedInternship.studentId
+      const intStudent = students.find((s) => s.id === matchedInternship.studentId)
+      if (intStudent) targetStudentName = intStudent.name
+    } else if (internshipId.startsWith('intern_')) {
+      targetStudentId = internshipId.replace('intern_', '')
+      const intStudent = students.find((s) => s.id === targetStudentId)
+      if (intStudent) targetStudentName = intStudent.name
+    }
+
     const existing = documents.find((d) => d.internshipId === internshipId && d.kind === kind)
     const rawUrl = (fileUrl || '').trim()
     const cleanUrl = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : undefined
 
     const next: Partial<InternshipDocument> = {
+      studentId: targetStudentId,
+      studentName: targetStudentName,
       fileName,
       fileData: fileData ?? existing?.fileData,
       fileUrl: cleanUrl ?? existing?.fileUrl,
@@ -1423,9 +1440,9 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     setDocuments(updated)
     syncToCloud({ documents: updated })
 
-    notify('admin', 'Document uploaded', `${docLabels[kind]} uploaded and awaiting T&P verification.`)
+    notify('admin', 'Document uploaded', `${docLabels[kind]} uploaded for ${targetStudentName || 'student'} and awaiting T&P verification.`)
     toast.success(`${docLabels[kind]} uploaded`, {
-      description: 'Document saved and sent to T&P cell for verification.',
+      description: 'Document saved and recorded in the verification ledger.',
     })
   }
 

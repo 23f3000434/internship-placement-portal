@@ -215,13 +215,14 @@ export default function DocumentsPage() {
               .map((doc) => {
                 const linkedInternship = p.internships.find((n) => n.id === doc.internshipId)
                 const linkedStudent =
-                  p.students.find(
-                    (s) =>
-                      s.id === linkedInternship?.studentId ||
-                      (doc.internshipId.startsWith('intern_')
-                        ? doc.internshipId.replace('intern_', '')
-                        : null),
-                  ) || (p.role === 'student' ? student : null)
+                  (doc.studentId ? p.students.find((s) => s.id === doc.studentId) : null) ||
+                  (linkedInternship ? p.students.find((s) => s.id === linkedInternship.studentId) : null) ||
+                  (doc.internshipId.startsWith('intern_')
+                    ? p.students.find((s) => s.id === doc.internshipId.replace('intern_', ''))
+                    : null) ||
+                  (doc.studentName
+                    ? ({ name: doc.studentName, enrollment: 'STUDENT', branch: 'Applied Sciences', cgpa: 8.5 } as Student)
+                    : null)
 
                 return (
                   <div
@@ -515,14 +516,16 @@ export default function DocumentsPage() {
           doc={viewDoc}
           internship={p.internships.find((n) => n.id === viewDoc.internshipId)}
           student={
-            p.students.find(
-              (s) =>
-                s.id ===
-                (p.internships.find((n) => n.id === viewDoc.internshipId)?.studentId ||
-                  (viewDoc.internshipId.startsWith('intern_')
-                    ? viewDoc.internshipId.replace('intern_', '')
-                    : p.actingStudentId)),
-            ) || student
+            (viewDoc.studentId ? p.students.find((s) => s.id === viewDoc.studentId) : null) ||
+            (p.internships.find((n) => n.id === viewDoc.internshipId)
+              ? p.students.find(
+                  (s) => s.id === p.internships.find((n) => n.id === viewDoc.internshipId)?.studentId,
+                )
+              : null) ||
+            (viewDoc.internshipId.startsWith('intern_')
+              ? p.students.find((s) => s.id === viewDoc.internshipId.replace('intern_', ''))
+              : null) ||
+            (p.role === 'student' ? student : null)
           }
         />
       )}

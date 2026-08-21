@@ -322,7 +322,20 @@ export default function VerificationsPage() {
           open={Boolean(viewDoc)}
           onOpenChange={(open) => !open && setViewDoc(null)}
           doc={viewDoc}
-          student={p.students.find((s) => viewDoc.id.includes(s.id)) || p.students[0]}
+          internship={p.internships.find((n) => n.id === viewDoc.internshipId)}
+          student={
+            (viewDoc.studentId ? p.students.find((s) => s.id === viewDoc.studentId) : null) ||
+            (p.internships.find((n) => n.id === viewDoc.internshipId)
+              ? p.students.find(
+                  (s) => s.id === p.internships.find((n) => n.id === viewDoc.internshipId)?.studentId,
+                )
+              : null) ||
+            (viewDoc.internshipId.startsWith('intern_')
+              ? p.students.find((s) => s.id === viewDoc.internshipId.replace('intern_', ''))
+              : null) ||
+            p.students.find((s) => viewDoc.id.includes(s.id)) ||
+            undefined
+          }
         />
       )}
     </>
